@@ -1,0 +1,48 @@
+# The PME setup instructions are draft only text and will need to be improved.
+# Please report any issues with the setup and build instructions or supply a 
+# patch to update these instructions.
+
+# On Ubuntu 19.10 install the following packages
+sudo apt install libbsd-dev libpcap-dev python3-pip pkg-config ninja-build
+
+# Ninja needs to be at least version 1.9.0
+# Meson needs to be at least version 0.51.2
+
+git clone https://github.com/mesonbuild/meson.git
+
+# install meson with python3
+python3 setup.py install
+
+# Install Go do not use apt-get as that is an older version
+# get the correct tar file from https://golang.org/dl/ and follow the instructions
+# I picked 1.13.7 release go1.13.7.linux-amd64.tar.gz but a newer version will work too
+# look at the site below for the latest version of Go
+wget https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.13.7.linux-amd64.tar.gz
+
+# Setup GOPATH to some location $HOME/go is one place
+
+# The current process info patch is in the patches directory.
+# Apply the patch to the 20.02-rc1 release of DPDK and build dpdk plus your application.
+# The patch is named process-info-dpdk-20.02.patch
+
+cd perfmon/pcm
+make
+
+# install the standard Linux MSR module
+sudo modprobe msr
+
+# The script will run and create the mmap region for PME to access.
+# The script does not put the daemon in the background
+./doit
+
+# In a new xterm execute the pme tool. The pme_run script will build PME and execute it.
+# Note: Need to have an xterm with around 132 characters wide and 46 or more rows.
+
+cd perfmon/pme
+./pme_run
+
+# at this point you should have the tool running and using the function keys you
+# can display the different screens and data.
+
+TODO: More details and instructions to be added.

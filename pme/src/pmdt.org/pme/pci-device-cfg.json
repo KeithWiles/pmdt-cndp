@@ -1,0 +1,186 @@
+[
+	{
+	  "group_name": "NetworkGroup",
+	  "group": [
+		{
+		  "name": "Network Controller",
+		  "class": {
+			"devclass": 2,
+			"subclass": 0
+		  },
+		  "vendor_id": "",
+		  "device_id": "",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "Cavium PKX",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a0dd:a049",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "AVP NIC",
+		  "class": {
+			"devclass": 5,
+			"subclass": 0
+		  },
+		  "vendor_id": "1af4",
+		  "device_id": "1110",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "IFPGA Controller",
+		  "class": {
+			"devclass": 18,
+			"subclass": 0
+		  },
+		  "vendor_id": "",
+		  "device_id": "",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		}
+	  ]
+	},
+	{
+	  "group_name": "CryptoGroup",
+	  "group": [
+		{
+		  "name": "Encryption Controller",
+		  "class": {
+			"devclass": 16,
+			"subclass": 0
+		  },
+		  "vendor_id": "",
+		  "device_id": "",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "Intel Processor",
+		  "class": {
+			"devclass": 11,
+			"subclass": 0
+		  },
+		  "vendor_id": "",
+		  "device_id": "",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		}
+	  ]
+	},
+	{
+	  "group_name": "DmaGroup",
+	  "group": [
+		{
+		  "name": "Intel IOAT Broadwell",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "",
+		  "device_id": "6f20:6f21:6f22:6f23:6f24:6f25:6f26:6f27:6f2e:6f2f",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "Intel IOAT Skylake",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "",
+		  "device_id": "2021",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		}
+	  ]
+	},
+	{
+	  "group_name": "EventdevGroup",
+	  "group": [
+		{
+		  "name": "Cavium SSO",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a04b:a04d",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "Cavium TIM",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a051",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "Octeonx2 SSO",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a0f9:a0fa",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		}
+	  ]
+	},
+	{
+	  "group_name": "MempoolGroup",
+	  "group": [
+		{
+		  "name": "Cavium FGA",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a053",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		},
+		{
+		  "name": "Octeonx2 NPA",
+		  "class": {
+			"devclass": 8,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a0fb:a0fc",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		}
+	  ]
+	},
+	{
+	  "group_name": "CompressGroup",
+	  "group": [
+		{
+		  "name": "Cavium ZIP",
+		  "class": {
+			"devclass": 18,
+			"subclass": 0
+		  },
+		  "vendor_id": "177d",
+		  "device_id": "a037",
+		  "svendor_id": "",
+		  "sdevice_id": ""
+		}
+	  ]
+	}
+  ]

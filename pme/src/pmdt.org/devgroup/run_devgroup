@@ -1,0 +1,2 @@
+go build -gcflags '-N -l' devgroup.go && ./devgroup $*
+stty sane 

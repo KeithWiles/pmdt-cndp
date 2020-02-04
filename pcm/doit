@@ -1,0 +1,2 @@
+sudo ./daemon/pcm-daemon -p 1000 -c all
+

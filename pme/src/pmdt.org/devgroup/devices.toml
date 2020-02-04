@@ -1,0 +1,184 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright(c) 2019-2020 Intel Corporation
+
+# TOML configuration of Devices and Groups of devices
+#
+# Each device maps to a GO structure called devbind.DeviceConfig
+#
+# Basic layout of each TOML section to this structure
+#
+# [IOAT-Bdw]                        # Device Name
+#   group = "DMAGroup"            # Group for this device
+#   desc = "Intel IOAT Broadwell" # Device Description
+#   vendor_id = "8086"            # Device ID
+#   device_id = "6f20:6f21:6f22:6f23:6f24:6f25:6f26:6f27:6f2e:6f2f" # List of device IDs
+#   svendor_id = ""               # Sub Vendor ID
+#   sdevice_id = ""               # Sub Device ID
+#   [IOAT-Bdw.class]                # Device Class and SubClass
+#    devclass = "08"              # Device Class
+#    subclass = "00"              # Device SubClass
+# Note: the indented places use tabs or spaces must be present
+# All IDs are in hex values without leading '0x' prefix
+#
+# Groups: NetworkGroup, CryptoGroup, DMAGroup, EventdevGroup
+#         MempoolGroup, CompressGroup
+
+# =============== Network Group ===============
+[Network]
+  group = "NetworkGroup"
+  desc = "Network Controller"
+  vendor_id = ""
+  device_id = ""
+  svendor_id = ""
+  sdevice_id = ""
+  [Network.class]
+    devclass = "02"
+    subclass = ""
+
+[AVP-vNic]
+  group = "NetworkGroup"
+  desc = "AVP NIC"
+  vendor_id = "1af4"
+  device_id = "1110"
+  svendor_id = ""
+  sdevice_id = ""
+  [AVP-vNic.class]
+    devclass = "05"
+    subclass = ""
+
+[CaviumPKX]
+  group = "NetworkGroup"
+  desc = "Cavium PKX"
+  vendor_id = "177d"
+  device_id = "a0dd:a049"
+  svendor_id = ""
+  sdevice_id = ""
+  [CaviumPKX.class]
+    devclass = "08"
+    subclass = ""
+
+[IFPGA]
+  group = "NetworkGroup"
+  desc = "IFPGA Controller"
+  vendor_id = ""
+  device_id = ""
+  svendor_id = ""
+  sdevice_id = ""
+  [IFPGA.class]
+    devclass = "12"
+    subclass = ""
+
+# =============== Crypto Group ===============
+[Encryption]
+  group = "CryptoGroup"
+  desc = "Encryption Controller"
+  vendor_id = ""
+  device_id = ""
+  svendor_id = ""
+  sdevice_id = ""
+  [Encryption.class]
+    devclass = "10"
+    subclass = ""
+
+[IntelProcessor]
+  group = "CryptoGroup"
+  desc = "Intel Processor"
+  vendor_id = ""
+  device_id = ""
+  svendor_id = ""
+  sdevice_id = ""
+  [IntelProcessor.class]
+    devclass = "0b"
+    subclass = ""
+
+# =============== DMA Group ===============
+[IOAT-Bdw]
+  group = "DMAGroup"
+  desc = "Intel IOAT Broadwell"
+  vendor_id = ""
+  device_id = "6f20:6f21:6f22:6f23:6f24:6f25:6f26:6f27:6f2e:6f2f"
+  svendor_id = ""
+  sdevice_id = ""
+  [IOAT-Bdw.class]
+    devclass = "08"
+    subclass = ""
+
+[IOAT-Skx]
+  group = "DMAGroup"
+  desc = "Intel IOAT Skylake"
+  vendor_id = ""
+  device_id = "2021"
+  svendor_id = ""
+  sdevice_id = ""
+  [IOAT-Skx.class]
+    devclass = "08"
+    subclass = ""
+
+# =============== Eventdev Group ===============
+[CaviumSSO]
+  group = "EventdevGroup"
+  desc = "Cavium SSO"
+  vendor_id = "177d"
+  device_id = "a04b:a04d"
+  svendor_id = ""
+  sdevice_id = ""
+  [CaviumSSO.class]
+    devclass = "08"
+    subclass = ""
+
+[CaviumTIM]
+  group = "EventdevGroup"
+  desc = "Cavium TIM"
+  vendor_id = "177d"
+  device_id = "a051"
+  svendor_id = ""
+  sdevice_id = ""
+  [CaviumTIM.class]
+    devclass = "08"
+    subclass = ""
+
+[Octeontx2SSO]
+  group = "EventdevGroup"
+  desc = "Octeonx2 SSO"
+  vendor_id = "177d"
+  device_id = "a0f9:a0fa"
+  svendor_id = ""
+  sdevice_id = ""
+  [Octeontx2SSO.class]
+    devclass = "08"
+    subclass = ""
+
+# =============== Mempool Group ===============
+[CaviumFPA]
+  group = "MempoolGroup"
+  desc = "Cavium FGA"
+  vendor_id = "177d"
+  device_id = "a053"
+  svendor_id = ""
+  sdevice_id = ""
+  [CaviumFPA.class]
+    devclass = "08"
+    subclass = ""
+
+[Octeontx2NPA]
+  group = "MempoolGroup"
+  desc = "Octeonx 2NPA"
+  vendor_id = "177d"
+  device_id = "a0fb:a0fc"
+  svendor_id = ""
+  sdevice_id = ""
+  [Octeontx2NPA.class]
+    devclass = "08"
+    subclass = ""
+
+# =============== Compress Group ===============
+[CaviumZIP]
+  group = "CompressGroup"
+  desc = "Cavium ZIP"
+  vendor_id = "177d"
+  device_id = "a037"
+  svendor_id = ""
+  sdevice_id = ""
+  [CaviumZIP.class]
+    devclass = "12"
+    subclass = ""

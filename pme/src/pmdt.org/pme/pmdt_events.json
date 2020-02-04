@@ -1,0 +1,131 @@
+[
+  {
+    "Name": "Default",
+    "Description": "Default set of events",
+    "Events": [
+	{ "EventName": "cpu-cycles", "Display": "cpu-cycles", "GroupType": "{" },
+	{ "EventName": "mem_load_uops_retired.l2_miss", "Display": "uops_l2_miss", "GroupType": "" },
+	{ "EventName": "mem_load_uops_retired.l3_miss", "Display": "uops_l3_miss", "GroupType": "" },
+	{ "EventName": "offcore_requests_outstanding.all_data_rd", "Display": "read requests", "GroupType": "}" },
+	{ "EventName": "cpu_clk_unhalted.thread_any", "Display": "cpu_clk.thread_any", "GroupType": "{" },
+	{ "EventName": "inst_retired.any", "Display": "inst_retired", "GroupType": "}" }
+    ]
+  },
+  {
+    "Name": "IPC",
+    "Description": "Default set of events to get IPC",
+    "Events": [
+		{ "EventName": "br_misp_retired.near_taken", "Display": "br_misp_retired", "GroupType": "" },
+		{ "EventName": "cpu_clk_unhalted.thread_any", "Display": "cpu_clk.thread_any", "GroupType": "{" },
+	    { "EventName": "inst_retired.any", "Display": "inst_retired", "GroupType": "" }
+    ]
+  },
+  {
+    "Name": "Profile3",
+    "Description": "Default set of events",
+    "Events": [
+	    { "EventName": "cpu-cycles", "Display": "cpu-cycles", "GroupType": "{" },
+	    { "EventName": "br_misp_retired.ret", "Display": "br_misp_retired", "GroupType": "" },
+	    { "EventName": "inst_retired.any", "Display": "inst_retired", "GroupType": "" },
+	    { "EventName": "instructions", "Display": "instructions", "GroupType": "}" },
+		{ "EventName": "cpu_clk_unhalted.thread_any", "Display": "cpu_clk.thread_any", "GroupType": "{" },
+		{ "EventName": "inst_retired.any", "Display": "inst_retired", "GroupType": "}" }
+		]
+  },
+  {
+    "Name": "toplev",
+    "Description": "Top Down event model",
+    "Events": [
+		{ "EventName": "cpu/event=0x3c,umask=0x0,any=1/", "Display": "cpu/event=03c", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xe,umask=0x1/", "Display": "pu/event=0x9c,umask=0x1/", "GroupType": "" },
+		{ "EventName": "cpu/event=0x9c,umask=0x1/", "Display": "cpu/event=0x9c,umask=0x1/", "GroupType": "" },
+		{ "EventName": "cpu/event=0xd,umask=0x3,any=1,cmask=1/", "Display": "cpu/event=0xd,umask=0x3,any=1,cmask=1/", "GroupType": "" },
+		{ "EventName": "cpu/event=0xc2,umask=0x2/", "Display": "cpu/event=0xc2,umask=0x2/", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x3c,umask=0x0,any=1/", "Display": "cpu/event=0x3c,umask=0x0,any=1/", "GroupType": "{" },
+		{ "EventName": "instructions,cpu/event=0x9c,umask=0x1/", "Display": "instructions", "GroupType": "" },
+		{ "EventName": "cycles,cpu/event=0x9c,umask=0x1,cmask=4/", "Display": "foo", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x3c,umask=0x0,any=1/", "Display": "bar", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xe,umask=0x1/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0x79,umask=0x30/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xc2,umask=0x2/", "Display": "AB", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xc5,umask=0x0/", "Display": "BB", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xc3,umask=0x1", "Display": "CC", "GroupType": "" },
+		{ "EventName": "edge=1,cmask=1/", "Display": "DD", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xa3,umask=0x6,cmask=6/", "Display": "EE", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xa2,umask=0x8/", "Display": "FF", "GroupType": "" },
+		{ "EventName": "cpu/event=0xa3,umask=0x4,cmask=4/", "Display": "GG", "GroupType": "" },
+		{ "EventName": "cpu/event=0xb1,umask=0x1,cmask=1/", "Display": "HH", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xb1,umask=0x1,cmask=2/", "Display": "II", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xb1,umask=0x1,cmask=3/", "Display": "JJ", "GroupType": "" },
+		{ "EventName": "cpu/event=0x9c,umask=0x1,cmask=4/", "Display": "KK", "GroupType": "" },
+		{ "EventName": "cycles,cpu/event=0x5e,umask=0x1/", "Display": "KK", "GroupType": "" },
+		{ "EventName": "instructions", "Display": "Instructions", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x80,umask=0x4/", "Display": "LL", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xab,umask=0x2/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cpu/event=0x87,umask=0x1/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cycles,cpu/event=0x79,umask=0x30,edge=1,cmask=1/", "Display": "LL", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x3c,umask=0x0,any=1/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xc1,umask=0x40/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cpu/event=0x14,umask=0x1/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cpu/event=0xa2,umask=0x8/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cycles", "Display": "Cycles", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x3c,umask=0x0,any=1/", "Display": "LL", "GroupType": "{" },
+		{ "EventName": "cpu/event=0x79,umask=0x24,cmask=4/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cpu/event=0x79,umask=0x18,cmask=4/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cpu/event=0x79,umask=0x24,cmask=1/", "Display": "LL", "GroupType": "" },
+		{ "EventName": "cpu/event=0x79,umask=0x18,cmask=1/", "Display": "LL", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x3c,umask=0x0,any=1/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xa8,umask=0x1,cmask=1/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xa8,umask=0x1,cmask=4/", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xa3,umask=0x6,cmask=6/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xa3,umask=0xc,cmask=12/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xa3,umask=0x5,cmask=5/", "Display": "", "GroupType": "" },
+		{ "EventName": "cycles", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0x85,umask=0x60/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0x85,umask=0x10,cmask=1/", "Display": "", "GroupType": "" },
+		{ "EventName": "cycles,cpu/event=0x85,umask=0xe/", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xc5,umask=0x0/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xe6,umask=0x1f/", "Display": "", "GroupType": "" },
+		{ "EventName": "cycles,cpu/event=0xc3,umask=0x1,edge=1,cmask=1/", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xa3,umask=0x5,cmask=5/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xd1,umask=0x4/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xd1,umask=0x20/", "Display": "", "GroupType": "" },
+		{ "EventName": "cycles", "Display": "Cycles", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xc7,umask=0x1/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xc0,umask=0x2/", "Display": "", "GroupType": "" },
+		{ "EventName": "instructions", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xc7,umask=0x2/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xc2,umask=0x2/", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xc7,umask=0x10/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xc7,umask=0x8/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xc7,umask=0x20/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xc7,umask=0x4/", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xb1,umask=0x1,cmask=2/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cpu/event=0xa3,umask=0x4,cmask=4/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xb1,umask=0x1,cmask=1/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xb1,umask=0x1,cmask=3/", "Display": "", "GroupType": "}" },
+
+		{ "EventName": "cpu/event=0xa3,umask=0x6,cmask=6/", "Display": "", "GroupType": "{" },
+		{ "EventName": "cycles", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0xa2,umask=0x8/", "Display": "", "GroupType": "" },
+		{ "EventName": "cpu/event=0x5e,umask=0x1/", "Display": "", "GroupType": "" },
+		{ "EventName": "instructions", "Display": "", "GroupType": "}" }
+    ]
+  }
+]
