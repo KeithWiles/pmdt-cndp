@@ -8,8 +8,6 @@ replace pmdt.org/devbind => ../devbind
 
 replace pmdt.org/dpdk => ../dpdk
 
-replace github.com/shirou/gopsutil => ../../github.com/shirou/gopsutil
-
 replace pmdt.org/ttylog => ../ttylog
 
 replace pmdt.org/perfdata => ../perfdata
@@ -44,7 +42,7 @@ require (
 	github.com/gdamore/tcell v1.3.0
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/rivo/tview v0.0.0-20200204110323-ae3d8cac5e4b
-	github.com/shirou/gopsutil v0.0.0-00010101000000-000000000000
+	github.com/shirou/gopsutil v2.20.1+incompatible
 	pmdt.org/colorize v0.0.0-00010101000000-000000000000
 	pmdt.org/devbind v0.0.0-00010101000000-000000000000
 	pmdt.org/etimers v0.0.0-00010101000000-000000000000

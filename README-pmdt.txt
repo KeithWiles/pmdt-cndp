@@ -21,5 +21,9 @@ perfmon/pme is the Performance monitor application written in Go.
 
 Read the pcm/README.txt file for more information about build and running the pcm-daemon.
 
+Reporting issues and bugs should be sent to dev@dpdk.org with a subject tag of '[PMDT]'.
+Patches to the PMDT project should be sent to dev@dpdk.org with subject tag of '[PMDT PATCH]', unless a specific email address is created i.e. pmdt@dpdk.org.
+All patches must follow the DPDK.org patch submission process.
+
 Thanks
 
