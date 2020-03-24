@@ -1,4 +1,4 @@
-module pmdt.org/pcm
+module pmdt.org/pcm-shm
 
 replace pmdt.org/ttylog => ../ttylog
 

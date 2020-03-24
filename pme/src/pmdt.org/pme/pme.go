@@ -19,7 +19,7 @@ import (
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 	"pmdt.org/etimers"
-	"pmdt.org/pcm"
+	pcm "pmdt.org/pcm-shm"
 	"pmdt.org/pinfo"
 	"pmdt.org/profiles"
 )

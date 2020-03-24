@@ -24,7 +24,7 @@ replace pmdt.org/etimers => ../etimers
 
 replace pmdt.org/profiles => ../profiles
 
-replace pmdt.org/pcm => ../pcm
+replace pmdt.org/pcm-shm => ../pcm-shm
 
 replace pmdt.org/encoding/raw => ../encoding/raw
 
@@ -48,7 +48,7 @@ require (
 	pmdt.org/etimers v0.0.0-00010101000000-000000000000
 	pmdt.org/graphdata v0.0.0-00010101000000-000000000000
 	pmdt.org/intelpbf v0.0.0-00010101000000-000000000000
-	pmdt.org/pcm v0.0.0-00010101000000-000000000000
+	pmdt.org/pcm-shm v0.0.0-00010101000000-000000000000
 	pmdt.org/pinfo v0.0.0-00010101000000-000000000000
 	pmdt.org/profiles v0.0.0-00010101000000-000000000000
 	pmdt.org/taborder v0.0.0-00010101000000-000000000000

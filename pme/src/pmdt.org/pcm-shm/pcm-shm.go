@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright(c) 2019-2020 Intel Corporation
 
-package pcm
+package pcmshm
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ type Data struct {
 }
 
 func e(format string, args ...interface{}) error {
-	return fmt.Errorf("pcm: "+format, args...)
+	return fmt.Errorf("pcm-shm: "+format, args...)
 }
 
 // Reader is the data []bytes in bytes.Buffer (io.Reader)

@@ -12,7 +12,7 @@ import (
 	"github.com/rivo/tview"
 	cz "pmdt.org/colorize"
 	"pmdt.org/graphdata"
-	"pmdt.org/pcm"
+	pcm "pmdt.org/pcm-shm"
 	tab "pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )

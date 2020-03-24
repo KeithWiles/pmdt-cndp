@@ -6,7 +6,7 @@ package main
 import (
 	"unsafe"
 
-	"pmdt.org/pcm"
+	pcm "pmdt.org/pcm-shm"
 )
 
 // DumpSharedMemory offsets and sizes to debug shared memory layout
