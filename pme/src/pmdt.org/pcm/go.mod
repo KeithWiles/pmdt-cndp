@@ -1,3 +1,3 @@
-module pmdt.org/pcm-data
+module pmdt.org/pcm
 
 go 1.13

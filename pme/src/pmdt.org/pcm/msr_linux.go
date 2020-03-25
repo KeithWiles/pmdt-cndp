@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright(c) 2019-2020 Intel Corporation
 
-package intelpbf
+package pcm
 
 import (
 	"encoding/binary"
@@ -16,6 +16,10 @@ import (
 type MSRfd struct {
 	fd int
 }
+
+const (
+	CPUMsrFile string = "/dev/cpu/%d/msr"
+)
 
 // Open a MSR register
 // Using the FD open the requested CPU MSR file

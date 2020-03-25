@@ -412,7 +412,7 @@ void pcm_cpuid(int leaf, PCM_CPUID_INFO & info)
     __cpuid(info.array, leaf);
     #else
     __asm__ __volatile__ ("cpuid" : \
-                          "=a" (info.reg.eax), "=b" (info.reg.ebx), "=c" (info.reg.ecx), "=d" (info.reg.edx) : "a" (leaf));
+        "=a" (info.reg.eax), "=b" (info.reg.ebx), "=c" (info.reg.ecx), "=d" (info.reg.edx) : "a" (leaf));
     #endif
 }
 
@@ -2884,7 +2884,7 @@ uint32 PCM::checkCustomCoreProgramming(std::shared_ptr<SafeMsrHandle> msr)
 
 	if (!canUsePerf)
 		return 0;
-		
+
     if (size_t(core) >= lastProgrammedCustomCounters.size())
     {
         // checking 'canUsePerf'because corruption detection curently works
