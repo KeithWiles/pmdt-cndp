@@ -4,11 +4,12 @@
 package main
 
 import (
-	"unsafe"
+//	"unsafe"
 
-	pcm "pmdt.org/pcm-shm"
+//	"pmdt.org/pcm"
 )
 
+/****
 // DumpSharedMemory offsets and sizes to debug shared memory layout
 func DumpSharedMemory() string {
 	foo := pcm.SharedPCMState{}
@@ -157,3 +158,4 @@ func DumpSharedMemory() string {
 
 	return s
 }
+***/

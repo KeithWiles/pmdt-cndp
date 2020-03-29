@@ -18,6 +18,7 @@ type MSRfd struct {
 }
 
 const (
+	// CPUMsrFile string
 	CPUMsrFile string = "/dev/cpu/%d/msr"
 )
 

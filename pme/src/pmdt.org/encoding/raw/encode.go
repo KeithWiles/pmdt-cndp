@@ -491,7 +491,7 @@ func (enc *EncodeRaw) encode(v reflect.Value) error {
 	return nil
 }
 
-// Encode the shared memory region into SharedPCMState structure
+// Encode the shared memory region into structure
 func (enc *EncodeRaw) Encode(v interface{}) error {
 
 	if v == nil {

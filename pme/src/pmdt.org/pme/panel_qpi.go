@@ -4,13 +4,13 @@
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"os/exec"
 
 	"github.com/rivo/tview"
-	cz "pmdt.org/colorize"
+//	cz "pmdt.org/colorize"
 	"pmdt.org/graphdata"
-	pcm "pmdt.org/pcm-shm"
+//	"pmdt.org/pcm"
 	"pmdt.org/taborder"
 )
 
@@ -26,7 +26,7 @@ type PageQPI struct {
 	qpiTotals  *tview.Table
 	qpiCharts  [2]*tview.TextView
 
-	pcmState *pcm.SharedPCMState
+//	pcmState *pcm.SharedPCMState
 
 	charts                *graphdata.GraphInfo
 	qpiRedraw, coreRedraw bool
@@ -109,30 +109,17 @@ func (pg *PageQPI) displayQPIPage(step int, ticks uint64) {
 
 	switch step {
 	case 0: // Display the data that was gathered
-		if perfmon.pcmData == nil {
-			break
-		}
-
-		pg.pcmState = nil
-		// Make sure we take the lock for updating the data
-		if ok := perfmon.pcmData.Lock(); ok {
-			defer perfmon.pcmData.Unlock()
-
-			pg.pcmState = perfmon.pcmData.State()
-			if pg.pcmState == nil {
-				return
-			}
-			pg.collectData()
-			pg.displayQPI(pg.qpi)
-			pg.displayQPICore(pg.qpiCore)
-			pg.displayQPITotals(pg.qpiTotals)
-			pg.displayCharts(pg.qpiCharts[0], 0, 0)
-			pg.displayCharts(pg.qpiCharts[1], 1, 1)
-		}
+		pg.collectData()
+		pg.displayQPI(pg.qpi)
+		pg.displayQPICore(pg.qpiCore)
+		pg.displayQPITotals(pg.qpiTotals)
+		pg.displayCharts(pg.qpiCharts[0], 0, 0)
+		pg.displayCharts(pg.qpiCharts[1], 1, 1)
 	}
 }
 
 func (pg *PageQPI) collectData() {
+	/*
 	qpi := pg.pcmState.PCMCounters.QPI
 
 	if qpi.IncomingQPITrafficMetricsAvailable {
@@ -145,10 +132,12 @@ func (pg *PageQPI) collectData() {
 		gd.AddPoint(float64(qpi.OutgoingTotal))
 		gd.SetName("Socket OUT Total")
 	}
+	*/
 }
 
 func (pg *PageQPI) displayQPI(view *tview.Table) {
 
+	/*
 	state := pg.pcmState
 	sys := state.PCMCounters.System
 
@@ -162,7 +151,7 @@ func (pg *PageQPI) displayQPI(view *tview.Table) {
 	SetCell(view, 1, 2, fmt.Sprintf("%s: %s", cz.Wheat("QPILinks"), cz.SkyBlue(sys.NumOfQPILinksPerSocket)), tview.AlignLeft)
 	SetCell(view, 1, 3, fmt.Sprintf("%s: %s", cz.Wheat("NumSockets"), cz.SkyBlue(sys.NumOfSockets)), tview.AlignLeft)
 	SetCell(view, 1, 4, fmt.Sprintf("%s: %s", cz.Wheat("Online"), cz.SkyBlue(sys.NumOfOnlineSockets)), tview.AlignLeft)
-
+*/
 	if pg.qpiRedraw {
 		pg.qpiRedraw = false
 		view.ScrollToBeginning()
@@ -170,7 +159,7 @@ func (pg *PageQPI) displayQPI(view *tview.Table) {
 }
 
 func (pg *PageQPI) displayQPICore(view *tview.Table) {
-
+/*
 	row := 0
 	col := 0
 	num := int(pg.pcmState.PCMCounters.System.NumOfOnlineCores)
@@ -219,10 +208,11 @@ func (pg *PageQPI) displayQPICore(view *tview.Table) {
 		SetCell(view, j+21, col, cz.SkyBlue(core[i].ThermalHeadroom))
 		col++
 	}
+	*/
 }
 
 func (pg *PageQPI) displayQPITotals(view *tview.Table) {
-
+/*
 	qpi := pg.pcmState.PCMCounters.QPI
 
 	row := 0
@@ -262,7 +252,7 @@ func (pg *PageQPI) displayQPITotals(view *tview.Table) {
 	}
 
 	row += num
-
+*/
 	if pg.coreRedraw {
 		pg.coreRedraw = false
 		view.ScrollToBeginning()

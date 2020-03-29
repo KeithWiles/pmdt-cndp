@@ -1,15 +1,30 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright(c) 2019-2020 Intel Corporation
 
+// +build !linux
+
 package pcm
 
 /*
 #include <stdint.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include "pcm_class.h"
+
+struct pcm_class _pcm;
 
 void
-pcm_cpuid_subleaf(int leaf, const unsigned int subleaf, uint32_t regs[])
+pcm_cpuid_subleaf(int leaf, const int subleaf, uint32_t regs[])
 {
-	__asm__ __volatile__ ("cpuid" : "=a" (regs[0]), "=b" (regs[1]), "=c" (regs[2]), "=d" (regs[3]) : "a" (leaf), "c" (subleaf));
+	__asm__ __volatile__ (
+		"cpuid" : "=a" (regs[0]),
+		"=b" (regs[1]),
+		"=c" (regs[2]),
+		"=d" (regs[3]) : "a" (leaf),
+		"c" (subleaf));
 }
 
 void
@@ -18,18 +33,45 @@ pcm_cpuid(int leaf, uint32_t regs[])
 	pcm_cpuid_subleaf(leaf, 0, regs);
 }
 
-#if 0
-double pop_mean(int numPoints, double a[]) {
-    if (a == NULL || numPoints == 0) {
-        return 0;
-    }
-    double mean = 0;
-    for (int i = 0; i < numPoints; i++) {
-        mean += a[i];
-    }
-	return mean / numPoints;
+int
+MsrHandle_open(uint32_t cpu)
+{
+	int handle;
+    char path[256];
+	snprintf(path, sizeof(path), "/dev/cpu/%d/msr", cpu);
+
+	handle = open(path, O_RDWR);
+
+    if (handle < 0)
+		 printf("PCM Error: can't open MSR handle for core\n");
+	else
+		_pcm.msr_fd = handle;
+
+    return handle;
 }
-#endif
+
+void
+MsrHandle_close(int fd)
+{
+	if (fd >= 0)
+		close(fd);
+}
+
+ssize_t
+MsrHandle_write(uint64_t msr_number, uint64_t value)
+{
+	if (_pcm.msr_fd <= 0)
+		return -1;
+    return pwrite(_pcm.msr_fd, (const void *)&value, sizeof(uint64_t), msr_number);
+}
+
+ssize_t
+MsrHandle_read(uint64_t msr_number, uint64_t * value)
+{
+	if (_pcm.msr_fd <= 0)
+		return -1;
+    return pread(_pcm.msr_fd, (void *)value, sizeof(uint64_t), msr_number);
+}
 */
 import "C"
 
@@ -72,13 +114,13 @@ func extractBits(val uint32, beg, end uint32) uint32 {
 	return v
 }
 
-// CPUid fills in the CPU id information
-func (p *Info) CPUid(leaf int) *CPURegs {
+// CPUidSubleaf to get data for leaf and subleaf
+func (p *Info) CPUidSubleaf(leaf, subleaf int) *CPURegs {
 
 	arr := make([]C.uint32_t, 4, 4)
 	fv := &(arr[0])
 
-	C.pcm_cpuid(C.int(leaf), fv)
+	C.pcm_cpuid_subleaf(C.int(leaf), C.int(subleaf), fv)
 
 	a := &CPURegs{}
 
@@ -90,28 +132,14 @@ func (p *Info) CPUid(leaf int) *CPURegs {
 	return a
 }
 
-/*
-// MyTest to figure out cgo
-func (p *Info) MyTest() {
-	// Get a basic function to work, while passing in an ARRAY
+// CPUid fills in the CPU id information
+func (p *Info) CPUid(leaf int) *CPURegs {
 
-	// Create a dummy array of (10,20,30), the mean of which is 20.
-	arr := make([]C.double, 0)
-	arr = append(arr, C.double(10.0))
-	arr = append(arr, C.double(20.0))
-	arr = append(arr, C.double(30.0))
-	firstValue := &(arr[0]) // this notation seems to be pretty important... Re-use this!
-	// if you don't make it a pointer right away, then you make a whole new object in a different location, so the contiguous-ness of the array is jeopardized.
-	// Because we have IMMEDIATELY made a pointer to the original value,the first value in the array, we have preserved the contiguous-ness of the array.
-	fmt.Println("array length: ", len(arr))
-
-	var arrayLength C.int
-	arrayLength = C.int(len(arr))
-	// arrayLength = C.int(2)
-
-	fmt.Println("array length we are using: ", arrayLength)
-
-	arrayMean := C.pop_mean(arrayLength, firstValue)
-	fmt.Println("pop_mean (10, 20, 30): ", arrayMean)
+	return p.CPUidSubleaf(leaf, 0)
 }
-*/
+
+// SetCPUModel in the C code
+func (p *Info) SetCPUModel() {
+
+	C._pcm.cpu_model = C.int(p.cpuModel)
+}

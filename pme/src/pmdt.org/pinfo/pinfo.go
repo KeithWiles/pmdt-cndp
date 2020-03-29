@@ -20,80 +20,12 @@ import (
 	tlog "pmdt.org/ttylog"
 )
 
-const (
-	// MaxPorts is the number ports supported
-	MaxPorts	int = 16
-)
-
-// RTEInfo is the data returned from the dpdk:info command
-type RTEInfo struct {
-	Version   string `json:"version"`
-	MaxBuffer int64  `json:"maxbuffer"`
-	ProcType  string `json:"proctype"`
-}
-
-// EALParams is the data structure to hold EAL Parameters
-type EALParams struct {
-	EALArgs []string `json:"ealargs"`
-	AppArgs []string `json:"appargs"`
-}
-
-// EALCmds host the list of commands
-type EALCmds struct {
-	Cmds []string
-}
-
-// PortState is the information about link state
-type PortState struct {
-	PortID int    `json:"port"`
-	Duplex string `json:"duplex"`
-	State  string `json:"state"`
-	Rate   int    `json:"rate"`
-}
-
-// DevList information
-type DevList struct {
-	Ports []PortState `json:"ports"`
-	Avail int         `json:"avail"`
-	Total int         `json:"total"`
-}
-
-// PortStats is the data structure to hold the counters.
-type PortStats struct {
-	PortID     int    `json:"portid"`
-	PacketsIn  uint64 `json:"ipackets"`
-	PacketsOut uint64 `json:"opackets"`
-	BytesIn    uint64 `json:"ibytes"`
-	BytesOut   uint64 `json:"obytes"`
-	MissedIn   uint64 `json:"imissed"`
-	ErrorsIn   uint64 `json:"ierrors"`
-	ErrorsOut  uint64 `json:"oerrors"`
-	RxNoMbuf   uint64 `json:"rx_nombuf"`
-
-	QInPackets  []uint64 `json:"q_ipackets"`
-	QOutPackets []uint64 `json:"q_opackets"`
-	QInBytes    []uint64 `json:"q_ibytes"`
-	QOutBytes   []uint64 `json:"q_obytes"`
-	QErrors     []uint64 `json:"q_errors"`
-}
-
-// PortXStats is the data structure to hold data
-type PortXStats struct {
-	PortID int
-	XStats map[string]uint64
-}
-
 // AppInfo - Information about the app
 type AppInfo struct {
-	valid  bool // true if the process info data is valid
+	valid  bool		// true if the process info data is valid
 	conn   *net.UnixConn
-	Pid    int64     // Pid for the DPDK process
-	Path   string    // Path of the process_info.<pid> file
-	Params EALParams // Holds the EAL parameter data
-	Info   RTEInfo   // Holds the DPDK process info data
-	Cmds   EALCmds   // List of all known commands
-	PrevStats [MaxPorts]PortStats
-	PrevXStats [MaxPorts]PortXStats
+	Pid    int64    // Pid for the process
+	Path   string   // Path of the process_pinfo.<pid> file
 }
 
 // Callback structure and data
@@ -102,105 +34,64 @@ type Callback struct {
 	cb   func(event int) // function to callback the application for notifies
 }
 
-// AppData holds all of the process info data
-type AppData map[string]*AppInfo
+// AppMapByPath holds all of the process info data
+type AppMapByPath map[string]*AppInfo
 
-// CallbackData hold the watcher fsnotify callback information
-type CallbackData map[string]*Callback
+// AppMapByPid holds all of the process info data
+type AppMapByPid map[int64]*AppInfo
 
-// ProcessInfo data for DPDK
+// CallbackMap holds the watcher fsnotify callback information
+type CallbackMap map[string]*Callback
+
+// ProcessInfo data for applications
 type ProcessInfo struct {
 	lock     sync.Mutex
 	opened   bool              // true if process info open
-	basePath string            // Base path to the dpdk run directory
-	currApps AppData           // Indexed by path for each DPDK application
-	callback CallbackData      // Callback routines for the fsnotify
+	basePath string            // Base path to the run directory
+	baseName string			   // Base file name
+	appsByPath AppMapByPath    // Indexed by path for each application
+	appsByPid AppMapByPid
+	callback CallbackMap       // Callback routines for the fsnotify
 	watcher  *fsnotify.Watcher // watcher for the directory notify
 }
-
-const (
-	dpdkDefaultPath = "/var/run/dpdk" // The DPDK default path string
-	dpdkBaseName    = "process_info." // The process info base filename
-)
 
 // Define the events the application callback will use
 const (
 	AppInited  = iota
 	AppCreated = iota
 	AppRemoved = iota
+
+	maxBufferSize = (16 * 1024)
 )
 
-var dpdkBasePath = dpdkDefaultPath
-
 // NewProcessInfo information structure
-func NewProcessInfo(w ...string) *ProcessInfo {
+func NewProcessInfo(bpath, bname string) *ProcessInfo {
 
-	pi := &ProcessInfo{}
+	pi := &ProcessInfo{ basePath: bpath, baseName: bname }
 
-	pi.basePath = dpdkDefaultPath + "/rte"
-	pi.currApps = make(map[string]*AppInfo)
-	pi.callback = make(map[string]*Callback)
+	pi.appsByPath = make(AppMapByPath)
+	pi.appsByPid = make(AppMapByPid)
+	pi.callback = make(CallbackMap)
 
 	pi.opened = false
-	if len(w) > 0 {
-		pi.basePath = w[0]
-	}
 
 	return pi
 }
 
-// Ethdev information
+// doCmd information
 func (pi *ProcessInfo) doCmd(a *AppInfo, cmd string) ([]byte, error) {
 
 	if _, err := a.conn.Write([]byte(cmd)); err != nil {
 		return nil, fmt.Errorf("write on socket failed: %v", err)
 	}
 
-	buf := make([]byte, a.Info.MaxBuffer) // big buffer
+	buf := make([]byte, maxBufferSize) // big buffer
 
 	n, err := a.conn.Read(buf)
 	if err != nil {
 		return nil, err
 	}
 	return buf[:n], nil
-}
-
-func (pi *ProcessInfo) getStaticData(a *AppInfo) error {
-
-	// Setup the first time then use the returned value
-	a.Info.MaxBuffer = 1024
-
-	d, err := pi.doCmd(a, "/dpdk:info")
-	if err != nil {
-		return err
-	}
-
-	// Parse the information from the DPDK info string
-	if err = json.Unmarshal(d, &a.Info); err != nil {
-		return err
-	}
-
-	d, err = pi.doCmd(a, "/eal:params")
-	if err != nil {
-		return err
-	}
-
-	// Parse the information from the DPDK info string
-	if err = json.Unmarshal(d, &a.Params); err != nil {
-		return err
-	}
-
-	pi.Commands(a)
-	d, err = pi.doCmd(a, "/")
-	if err != nil {
-		return err
-	}
-
-	// Parse the information from the DPDK info string
-	if err = json.Unmarshal(d, &a.Params); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (pi *ProcessInfo) watchDir(path string, fi os.FileInfo, err error) error {
@@ -227,8 +118,8 @@ func exists(path string) (bool, error) {
 	return true, err
 }
 
-// Open the dpdk directory and read the first set of directories
-func (pi *ProcessInfo) Open(w ...string) error {
+// Open the directory and read the first set of directories
+func (pi *ProcessInfo) Open() error {
 
 	// Create the watcher to watch all sub-directories
 	watcher, err := fsnotify.NewWatcher()
@@ -237,16 +128,16 @@ func (pi *ProcessInfo) Open(w ...string) error {
 	}
 	pi.watcher = watcher
 
-	if ok, _ := exists(dpdkDefaultPath); !ok {
-		os.MkdirAll(dpdkDefaultPath, os.ModePerm)
+	if ok, _ := exists(pi.basePath); !ok {
+		os.MkdirAll(pi.basePath, os.ModePerm)
 	}
 
-	tlog.DoPrintf("Watch: %s\n", dpdkDefaultPath)
+	tlog.DoPrintf("Watch: %s\n", pi.basePath)
 
-	watcher.Add(dpdkDefaultPath)
+	watcher.Add(pi.basePath)
 
-	if err := filepath.Walk(dpdkDefaultPath, pi.watchDir); err != nil {
-		return fmt.Errorf("%s: %v", dpdkDefaultPath, err)
+	if err := filepath.Walk(pi.basePath, pi.watchDir); err != nil {
+		return fmt.Errorf("%s: %v", pi.basePath, err)
 	}
 
 	pi.scan()
@@ -321,7 +212,7 @@ func (pi *ProcessInfo) Close() {
 	pi.opened = false
 }
 
-// Add callback function when /dpdk directory changes
+// Add callback function when directory changes
 func (pi *ProcessInfo) Add(name string, f func(event int)) {
 	pi.callback[name] = &Callback{name: name, cb: f}
 
@@ -336,15 +227,54 @@ func (pi *ProcessInfo) Remove(name string) {
 	}
 }
 
-// SetPath to the currect base path for dpdk apps
+// SetPath to the currect base path for apps
 func (pi *ProcessInfo) SetPath(path string) {
 	pi.basePath = path
 }
 
-// Scan for the DPDK process info socket files
+func (pi *ProcessInfo) addFile(name, dir string) {
+
+	if strings.HasPrefix(filepath.Base(name), pi.baseName) {
+		ext := filepath.Ext(name)
+
+		pid, err := strconv.ParseInt(ext[1:], 10, 64)
+		if err != nil {
+			tlog.WarnPrintf("uable to parse pid from filename %s\n", name)
+			return
+		}
+
+		var path string
+		if dir == "" {
+			path = pi.basePath + "/" + name
+		} else {
+			path = pi.basePath + "/" + dir + "/" + name
+		}
+		if a, ok := pi.appsByPath[path]; ok {
+			a.valid = true
+			return
+		}
+
+		// Open the connection to the application
+		t := "unixpacket"
+		laddr := net.UnixAddr{Name: path, Net: t}
+		conn, err := net.DialUnix(t, nil, &laddr)
+		if err != nil {
+			log.Fatalf("connection to socket failed: %v", err)
+		}
+
+		ap := &AppInfo{valid: true, Pid: pid, Path: path, conn: conn}
+		tlog.DoPrintf("Found %+v\n", ap)
+
+		// Add the AppInfo to the internal map structures
+		pi.appsByPath[path] = ap
+		pi.appsByPid[pid] = ap
+	}
+}
+
+// Scan for the process info socket files
 func (pi *ProcessInfo) scan() {
 
-	dpdkDirs, err := ioutil.ReadDir(dpdkBasePath)
+	dirs, err := ioutil.ReadDir(pi.basePath)
 	if err != nil {
 		log.Fatalf("ReadDir failed: %v\n", err)
 	}
@@ -355,64 +285,32 @@ func (pi *ProcessInfo) scan() {
 	// Set all of the current files to false, to allow for removal later
 	// When we find the same one in the scan we mark it as true, then
 	// remove the ones that are not valid anymore
-	for _, a := range pi.currApps {
+	for _, a := range pi.appsByPath {
 		a.valid = false
 	}
 
-	for _, entry := range dpdkDirs {
-
-		dpdkDir := entry.Name()
+	for _, entry := range dirs {
 
 		if entry.IsDir() {
-			appFiles, err := ioutil.ReadDir(dpdkBasePath + "/" + dpdkDir)
+			appFiles, err := ioutil.ReadDir(pi.basePath + "/" + entry.Name())
 			if err != nil {
-				log.Fatalf("Unable to open %s\n", dpdkBasePath+"/"+dpdkDir)
+				log.Fatalf("Unable to open %s\n", pi.basePath + "/" + entry.Name())
 			}
 
 			for _, file := range appFiles {
-				name := file.Name()
-
-				if strings.HasPrefix(filepath.Base(name), dpdkBaseName) {
-					ext := filepath.Ext(name)
-
-					pid, err := strconv.ParseInt(ext[1:], 10, 64)
-					if err != nil {
-						tlog.WarnPrintf("uable to parse pid from filename %s\n", name)
-						continue
-					}
-
-					path := dpdkBasePath + "/" + dpdkDir + "/" + name
-					if a, ok := pi.currApps[path]; ok {
-						a.valid = true
-						continue
-					}
-
-					// Open the connection to the DPDK application
-					t := "unixpacket"
-					laddr := net.UnixAddr{Name: path, Net: t}
-					conn, err := net.DialUnix(t, nil, &laddr)
-					if err != nil {
-						log.Fatalf("connection to socket failed: %v", err)
-					}
-
-					ap := &AppInfo{valid: true, Pid: pid, Path: path, conn: conn}
-
-					if err := pi.getStaticData(ap); err != nil {
-						break
-					}
-
-					// Add the AppInfo to the internal map structures
-					pi.currApps[path] = ap
-				}
+				pi.addFile(file.Name(), entry.Name())
 			}
+		} else {
+			pi.addFile(entry.Name(), "")
 		}
 	}
 
 	// release AppInfo data for old process info files/pids
-	for k, a := range pi.currApps {
+	for k, a := range pi.appsByPath {
 		if !a.valid {
 			a.conn.Close()
-			delete(pi.currApps, k)
+			delete(pi.appsByPid, a.Pid)
+			delete(pi.appsByPath, k)
 		}
 	}
 }
@@ -425,30 +323,47 @@ func (pi *ProcessInfo) Scan() {
 	}
 }
 
-// AppList returns the list of process info structures
-func (pi *ProcessInfo) AppList() AppData {
+// AppsList returns the list of AppInfo structures
+func (pi *ProcessInfo) AppsList() []*AppInfo {
 
-	return pi.currApps
-}
-
-// AppItem returns the application info structure for the given name
-func (pi *ProcessInfo) AppItem(name string) *AppInfo {
-
-	if a, ok := pi.currApps[name]; ok {
-		return a
+	p := make([]*AppInfo, 0)
+	for _, a := range pi.appsByPath {
+		p = append(p, a)
 	}
-	return nil
+	return p
 }
 
-// Files returns a string slice of DPDK application process info data
+// Files returns a string slice of application process info data
 func (pi *ProcessInfo) Files() []string {
 
 	files := []string{}
-	for _, a := range pi.currApps {
+	for _, a := range pi.appsByPath {
 		files = append(files, a.Path)
 	}
 
 	return files
+}
+
+// Pids returns a int64 slice of application process info data
+func (pi *ProcessInfo) Pids() []int64 {
+
+	pids := make([]int64, 0)
+	for _, a := range pi.appsByPid {
+		pids = append(pids, a.Pid)
+	}
+
+	return pids
+}
+
+// AppInfoByPid returns the AppInfo pointer using the Pid
+func (pi *ProcessInfo) AppInfoByPid(pid int64) *AppInfo {
+
+	for _, a := range pi.appsByPath {
+		if a.Pid == pid {
+			return a
+		}
+	}
+	return nil
 }
 
 // AppInfoByIndex returns the AppInfo pointer by the index
@@ -456,20 +371,14 @@ func (pi *ProcessInfo) AppInfoByIndex(idx int) *AppInfo {
 
 	if idx >= 0 {
 		files := pi.Files()
-		if a, ok := pi.currApps[files[idx]]; ok {
+		if a, ok := pi.appsByPath[files[idx]]; ok {
 			return a
 		}
 	}
 	return nil
 }
 
-// Args returns the current DPDK command line
-func (pi *ProcessInfo) Args(a *AppInfo) (EALParams, error) {
-
-	return a.Params, nil
-}
-
-// CommandList returns the list of commands in DPDK
+// CommandList returns the list of commands
 func (pi *ProcessInfo) CommandList(a *AppInfo) ([]byte, error) {
 
 	return pi.doCmd(a, "/")
@@ -494,125 +403,8 @@ func (pi *ProcessInfo) Commands(a *AppInfo) ([]string, error) {
 	return data.Cmds, nil
 }
 
-// list of devices as port ids
-func (pi *ProcessInfo) list(a *AppInfo, cmd string) (*DevList, error) {
+// IssueCommand to the process socket
+func (pi *ProcessInfo) IssueCommand(a *AppInfo, str string) ([]byte, error) {
 
-	b, err := pi.doCmd(a, cmd)
-	if err != nil {
-		return nil, err
-	}
-
-	list := &DevList{}
-
-	if err := json.Unmarshal(b, list); err != nil {
-		return nil, err
-	}
-	return list, nil
-}
-
-// stats information
-func (pi *ProcessInfo) stats(a *AppInfo, cmd string, portID int) (*PortStats, error) {
-
-	b, err := pi.doCmd(a, fmt.Sprintf("%s,%d", cmd, portID))
-	if err != nil {
-		return nil, err
-	}
-
-	data := &PortStats{}
-
-	data.PortID = portID
-	if err := json.Unmarshal(b, &data); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-// xstats information
-func (pi *ProcessInfo) xstats(a *AppInfo, cmd string, portID int) (*PortXStats, error) {
-
-	b, err := pi.doCmd(a, fmt.Sprintf("%s,%d", cmd, portID))
-	if err != nil {
-		return nil, err
-	}
-
-	data := &PortXStats{}
-
-	data.PortID = portID
-	if err := json.Unmarshal(b, &data.XStats); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}
-
-// Info returns the RTEInfo structure
-func (pi *ProcessInfo) Info(a *AppInfo) *RTEInfo {
-
-	if a == nil {
-		return nil
-	}
-	return &a.Info
-}
-
-// EthdevList of devices as port ids
-func (pi *ProcessInfo) EthdevList(a *AppInfo) (*DevList, error) {
-
-	return pi.list(a, "/ethdev:list")
-}
-
-// EthdevStats information
-func (pi *ProcessInfo) EthdevStats(a *AppInfo, portID int) (*PortStats, error) {
-
-	pstats, err := pi.stats(a, "/ethdev:stats", portID)
-	if err != nil {
-		return nil, fmt.Errorf("/ethdev:stats failed: %v", err)
-	}
-	p := *pstats
-	a.PrevStats[portID] = p
-
-	return pstats, err
-}
-
-// PreviousStats is the save stats data
-func (pi *ProcessInfo) PreviousStats(a *AppInfo, portID int) (PortStats, error) {
-
-	if portID >= len(a.PrevStats) {
-		return PortStats{}, fmt.Errorf("invalid port id")
-	}
-	return a.PrevStats[portID], nil
-}
-
-// EthdevXStats information
-func (pi *ProcessInfo) EthdevXStats(a *AppInfo, portID int) (*PortXStats, error) {
-
-	return pi.xstats(a, "/ethdev:xstats", portID)
-}
-
-// PreviousXStats is the save stats data
-func (pi *ProcessInfo) PreviousXStats(a *AppInfo, portID int) (*PortXStats, error) {
-	if portID >= len(a.PrevStats) {
-		return nil, fmt.Errorf("invalid port id")
-	}
-	pstats := &a.PrevXStats[portID]
-
-	return pstats, nil
-}
-
-// RawdevList of devices as port ids
-func (pi *ProcessInfo) RawdevList(a *AppInfo) (*DevList, error) {
-
-	return pi.list(a, "/rawdev:list")
-}
-
-// RawdevStats information
-func (pi *ProcessInfo) RawdevStats(a *AppInfo, portID int) (*PortStats, error) {
-
-	return pi.stats(a, "/rawdev:stats", portID)
-}
-
-// RawdevXStats information
-func (pi *ProcessInfo) RawdevXStats(a *AppInfo, portID int) (*PortXStats, error) {
-
-	return pi.xstats(a, "/rawdev:stats", portID)
+	return pi.doCmd(a, str)
 }

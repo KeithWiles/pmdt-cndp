@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -12,7 +13,9 @@ import (
 	"github.com/rivo/tview"
 	cz "pmdt.org/colorize"
 	"pmdt.org/graphdata"
-	pcm "pmdt.org/pcm-shm"
+	"pmdt.org/pcm"
+
+	//	"pmdt.org/pcm"
 	tab "pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )
@@ -33,7 +36,7 @@ type PagePCI struct {
 	note       *tview.TextView
 	pciCharts  [2]*tview.TextView
 	pciScanner *bufio.Scanner
-	pcmState   *pcm.SharedPCMState
+//	pcmState   *pcm.SharedPCMState
 	charts     *graphdata.GraphInfo
 	pciRedraw  bool
 	once       sync.Once
@@ -79,7 +82,6 @@ func PCIPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	// The PCI window is the view into the PCI stats and counters
 	pg.pci = CreateTableView(flex1, "Stats (p)", tview.AlignLeft, 11, 2, true)
 	pg.pci.SetSeparator(tview.Borders.Vertical)
-
 	// Chart some of the PCI counters
 	pg.pciCharts[0] = CreateTextView(flex3, "PCI Charts (1)", tview.AlignLeft, 0, 1, true)
 	pg.pciCharts[1] = CreateTextView(flex3, "PCI Charts (2)", tview.AlignLeft, 0, 1, true)
@@ -167,45 +169,51 @@ func (pg *PagePCI) addLegend() {
 // Display the PCI data if valid and collect the points for the charts
 func (pg *PagePCI) displayPCIPage(step int, ticks uint64) {
 
-	pg.once.Do(func() {
-		tlog.DebugPrintf(DumpSharedMemory())
-	})
-
 	switch step {
 	case 0: // Display the data that was gathered every second
-		if perfmon.pcmData == nil {
-			break
-		}
-		if ok := perfmon.pcmData.Lock(); ok {
-			defer perfmon.pcmData.Unlock()
-			pg.pcmState = perfmon.pcmData.State()
-
-			if pg.pcmState == nil {
-				return
-			}
-			pg.collectChartData()
-			pg.displayPCI(pg.pci)
-			pg.displayCharts(pg.pciCharts[0], 0, 0)
-			pg.displayCharts(pg.pciCharts[1], 1, 1)
-		}
+		pg.collectChartData()
+		pg.displayPCI(pg.pci)
+		pg.displayCharts(pg.pciCharts[0], 0, 0)
+		pg.displayCharts(pg.pciCharts[1], 1, 1)
 	}
 }
 
 // Collect the data from for charts
 func (pg *PagePCI) collectChartData() {
-
+/*
 	for i, gd := range pg.charts.Graphs() {
 		p := pg.pcmState
 
 		gd.AddPoint(float64(p.Sample[i].Total.ReadForOwnership))
 		gd.SetName(fmt.Sprintf("ReadForOwnership %d", i))
 	}
+	*/
 }
 
 // Display the PCI information into the window or table view object
 func (pg *PagePCI) displayPCI(view *tview.Table) {
 
 	row := 0
+
+	p := perfmon.pinfoPCM.AppsList()
+
+	d, err := perfmon.pinfoPCM.IssueCommand(p[0], "/pcm:pcieCounters")
+	if err != nil {
+		tlog.DoPrintf("Error on command: %s\n", err)
+		return
+	}
+//	tlog.DoPrintf("Command data: %v\n", string(d))
+
+	type pcieSample struct {
+		Sample map[string]pcm.SampleData
+	}
+	ps := pcieSample{}
+
+	if err := json.Unmarshal(d, &ps.Sample); err != nil {
+		tlog.DoPrintf("unmarshal failed: %v\n", err)
+		return
+	}
+//	tlog.DoPrintf("\npcieSample: %+v\n", ps)
 
 	// Set the column headers for the PCIe data
 	for i, s := range []string{"Socket", "ReadCurr",
@@ -215,12 +223,13 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 	row++
 
 	// Put the counters in the tabel view
-	num := int(pg.pcmState.PCMCounters.System.NumOfSockets)
-	for i := 0; i < num; i++ {
+	for k, sd := range ps.Sample {
+
+		tlog.DoPrintf("Key: %v, %+v\n", k, sd)
 
 		// Add the Total PCI counter values in the table
-		s := pg.pcmState.Sample[i].Total
-		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Total %d", i)), tview.AlignLeft)
+		s := sd.Total
+		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Total %s", k)), tview.AlignLeft)
 		SetCell(view, row, 1, cz.SkyBlue(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 		SetCell(view, row, 2, cz.SkyBlue(FormatUnits(s.ReadForOwnership)), tview.AlignRight)
 		SetCell(view, row, 3, cz.SkyBlue(FormatUnits(s.DemandCodeRd)), tview.AlignRight)
@@ -233,8 +242,8 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 		row++
 
 		// Add the Missed PCI counter values in the table
-		s = pg.pcmState.Sample[i].Miss
-		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Miss  %d", i)), tview.AlignLeft)
+		s = sd.Miss
+		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Miss  %s", k)), tview.AlignLeft)
 		SetCell(view, row, 1, cz.SkyBlue(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 		SetCell(view, row, 2, cz.SkyBlue(FormatUnits(s.ReadForOwnership)), tview.AlignRight)
 		SetCell(view, row, 3, cz.SkyBlue(FormatUnits(s.DemandCodeRd)), tview.AlignRight)
@@ -247,8 +256,8 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 		row++
 
 		// Add the cache Hit PCI counter values in the table
-		s = pg.pcmState.Sample[i].Hit
-		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Hit   %d", i)), tview.AlignLeft)
+		s = sd.Hit
+		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Hit   %s", k)), tview.AlignLeft)
 		SetCell(view, row, 1, cz.SkyBlue(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 		SetCell(view, row, 2, cz.SkyBlue(FormatUnits(s.ReadForOwnership)), tview.AlignRight)
 		SetCell(view, row, 3, cz.SkyBlue(FormatUnits(s.DemandCodeRd)), tview.AlignRight)
@@ -261,10 +270,11 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 
 		row++
 	}
+
 	row++
 
 	// Add the Aggregate PCI counter values in the table
-	s := pg.pcmState.Aggregate
+	s := ps.Sample["aggregate"].Total
 	SetCell(view, row, 0, cz.Orange("Aggregate"), tview.AlignLeft)
 	SetCell(view, row, 1, cz.Orange(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 	SetCell(view, row, 2, cz.Orange(FormatUnits(s.ReadForOwnership)), tview.AlignRight)

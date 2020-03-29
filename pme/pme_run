@@ -1,4 +1,2 @@
 (cd src/pmdt.org/pme; go build -gcflags '-N -l' && sudo -E ./pme $*)
-#(cd src/pmdt.org/pme; go build -gcflags '-N -l' && sudo -E ./pme $* 2> /dev/pts/2)
-#(cd src/pmdt.org/pme; go build && sudo -E ./pme $* 2> /dev/pts/2)
 stty sane 
