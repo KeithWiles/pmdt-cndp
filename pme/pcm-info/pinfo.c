@@ -236,6 +236,7 @@ int
 pinfo_init(const char *runtime_dir, const char *prefix, const char **err_str)
 {
     pthread_t t;
+    mode_t old;
     const char *dir, *pre;
 
     if (!prefix || (strlen(prefix) == 0) || (prefix[0] == '\0'))
@@ -257,6 +258,8 @@ pinfo_init(const char *runtime_dir, const char *prefix, const char **err_str)
             *err_str = pinfo.log_error;
         return -1;
     }
+
+    old = umask(0);
 
 	DIR *d = opendir(dir);
 	if (d)
@@ -288,6 +291,7 @@ pinfo_init(const char *runtime_dir, const char *prefix, const char **err_str)
                 "Error calling listen for socket: %s", strerror(errno));
         goto error;
     }
+    umask(old);
 
     pthread_create(&t, NULL, socket_listener, NULL);
     atexit(pinfo_remove);
@@ -298,6 +302,7 @@ error:
 	pinfo_remove();
     if (err_str)
         *err_str = pinfo.log_error;
+    umask(old);
     return -1;
 }
 
