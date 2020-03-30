@@ -378,12 +378,6 @@ func (pi *ProcessInfo) AppInfoByIndex(idx int) *AppInfo {
 	return nil
 }
 
-// CommandList returns the list of commands
-func (pi *ProcessInfo) CommandList(a *AppInfo) ([]byte, error) {
-
-	return pi.doCmd(a, "/")
-}
-
 // Commands returns the list of commands
 func (pi *ProcessInfo) Commands(a *AppInfo) ([]string, error) {
 

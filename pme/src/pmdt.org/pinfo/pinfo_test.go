@@ -4,7 +4,6 @@
 package pinfo
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -12,44 +11,36 @@ var pi *ProcessInfo
 
 func TestOpen(t *testing.T) {
 
-	pi = NewProcessInfo()
+	pi = NewProcessInfo("/var/run/pcm", "pinfo.")
 
 	if err := pi.Open(); err != nil {
 		t.Errorf("Open() failed: %v", err)
 	}
 
-	fmt.Println("Process  Open: OK")
+	t.Log("Process  Open: OK")
 }
 
 func TestInfo(t *testing.T) {
 
-	for _, a := range pi.AppList() {
-		info := pi.Info(a)
+	for _, a := range pi.AppsList() {
+		cmds, err := pi.Commands(a)
+		if err != nil {
+			t.Logf("Info for %s\n", a.Path);
+			continue
+		}
 
-		fmt.Printf("DPDK Info    : %+v\n", info)
+		t.Logf("Info    : %+v\n", cmds)
 	}
 }
 
 func TestCommands(t *testing.T) {
 
-	for _, a := range pi.AppList() {
+	for _, a := range pi.AppsList() {
 		cmds, err := pi.Commands(a)
 		if err != nil {
 			t.Errorf("unable to retrive commands: %v", err)
 		} else {
-			fmt.Printf("Commands     : %v\n", cmds)
-		}
-	}
-}
-
-func TestArgs(t *testing.T) {
-
-	for _, a := range pi.AppList() {
-		d, err := pi.Args(a)
-		if err != nil {
-			t.Errorf("command list failed: %v", err)
-		} else {
-			fmt.Printf("Args         : %v\n", d)
+			t.Logf("Commands     : %v\n", cmds)
 		}
 	}
 }
@@ -58,87 +49,7 @@ func TestFiles(t *testing.T) {
 
 	files := pi.Files()
 	if len(files) > 0 {
-		fmt.Printf("Files        : %v\n", files)
-	}
-}
-
-func TestEthdevStats(t *testing.T) {
-
-	for _, a := range pi.AppList() {
-		d, err := pi.EthdevList(a)
-		if err != nil {
-			t.Errorf("EthdevList failed: %v", err)
-		} else {
-			fmt.Printf("EthdevList   : %v\n", d)
-
-			for _, p := range d.Ports {
-				stats, err := pi.EthdevStats(a, p.PortID)
-				if err != nil {
-					t.Errorf("EthedevStats Failed: %v", err)
-				}
-				fmt.Printf("EthdevStats  : %+v\n\n", stats)
-			}
-		}
-	}
-}
-
-func TestEthdevXStats(t *testing.T) {
-
-	for _, a := range pi.AppList() {
-		d, err := pi.EthdevList(a)
-		if err != nil {
-			t.Errorf("EthdevList failed: %v", err)
-		} else {
-			fmt.Printf("EthdevList   : %v\n", d)
-
-			for _, p := range d.Ports {
-				stats, err := pi.EthdevXStats(a, p.PortID)
-				if err != nil {
-					t.Errorf("EthedevXStats Failed: %v", err)
-				}
-				fmt.Printf("EthdevXStats  : %+v\n\n", stats)
-			}
-		}
-	}
-}
-
-func TestRawdevStats(t *testing.T) {
-
-	for _, a := range pi.AppList() {
-		d, err := pi.RawdevList(a)
-		if err != nil {
-			t.Errorf("RawdevList failed: %v", err)
-		} else {
-			fmt.Printf("RawdevList   : %v\n", d)
-
-			for _, p := range d.Ports {
-				stats, err := pi.RawdevStats(a, p.PortID)
-				if err != nil {
-					t.Errorf("RawdevStats Failed: %v", err)
-				}
-				fmt.Printf("RawdevStats   : %+v\n\n", stats)
-			}
-		}
-	}
-}
-
-func TestRawdevXStats(t *testing.T) {
-
-	for _, a := range pi.AppList() {
-		d, err := pi.RawdevList(a)
-		if err != nil {
-			t.Errorf("RawdevList failed: %v", err)
-		} else {
-			fmt.Printf("RawdevList   : %v\n", d)
-
-			for _, p := range d.Ports {
-				stats, err := pi.RawdevXStats(a, p.PortID)
-				if err != nil {
-					t.Errorf("RawdevXStats Failed: %v", err)
-				}
-				fmt.Printf("RawdevXStats   : %+v\n\n", stats)
-			}
-		}
+		t.Logf("Files        : %v\n", files)
 	}
 }
 
@@ -149,5 +60,5 @@ func TestClose(t *testing.T) {
 	} else {
 		pi.Close()
 	}
-	fmt.Println("Process Close: OK")
+	t.Log("Process Close: OK")
 }
