@@ -98,13 +98,13 @@ func init() {
 	}
 
 	// Setup and locate the process info socket connections
-	perfmon.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "")
+	perfmon.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
 	if perfmon.pinfoDPDK == nil {
 		panic("unable to setup pinfoDPDK")
 	}
 
 	// Setup and locate the process info socket connections
-	perfmon.pinfoPCM = pinfo.NewProcessInfo("/var/run/pcm", "pinfo.")
+	perfmon.pinfoPCM = pinfo.NewProcessInfo("/var/run/pcm-info", "pinfo")
 	if perfmon.pinfoPCM == nil {
 		panic("unable to setup pinfoPCM")
 	}

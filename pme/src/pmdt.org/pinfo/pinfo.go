@@ -100,7 +100,7 @@ func (pi *ProcessInfo) watchDir(path string, fi os.FileInfo, err error) error {
 		return nil
 	}
 	if fi.Mode().IsDir() {
-		tlog.DoPrintf("watchDir: %s\n", path)
+		tlog.DebugPrintf("watchDir: %s\n", path)
 		return pi.watcher.Add(path)
 	}
 	return nil
@@ -132,7 +132,7 @@ func (pi *ProcessInfo) Open() error {
 		os.MkdirAll(pi.basePath, os.ModePerm)
 	}
 
-	tlog.DoPrintf("Watch: %s\n", pi.basePath)
+	tlog.DebugPrintf("Watch: %s\n", pi.basePath)
 
 	watcher.Add(pi.basePath)
 
@@ -158,7 +158,7 @@ func (pi *ProcessInfo) Open() error {
 				switch {
 				case (event.Op & fsnotify.Create) == fsnotify.Create:
 
-					tlog.DoPrintf("Event: %s\n", event.String())
+					//tlog.DoPrintf("Event: %s\n", event.String())
 
 					if fi, err := os.Stat(event.Name); err == nil {
 						if fi.Mode().IsDir() {
@@ -173,9 +173,9 @@ func (pi *ProcessInfo) Open() error {
 						c.cb(AppCreated)
 					}
 				case (event.Op & fsnotify.Remove) == fsnotify.Remove:
-					tlog.DoPrintf("Event: %s\n", event.String())
+					tlog.DebugPrintf("Event: %s\n", event.String())
 
-					tlog.DoPrintf("Remove Watcher for %s\n", event.Name)
+					tlog.DebugPrintf("Remove Watcher for %s\n", event.Name)
 					watcher.Remove(event.Name)
 
 					pi.scan()
@@ -263,7 +263,6 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 		}
 
 		ap := &AppInfo{valid: true, Pid: pid, Path: path, conn: conn}
-		tlog.DoPrintf("Found %+v\n", ap)
 
 		// Add the AppInfo to the internal map structures
 		pi.appsByPath[path] = ap
@@ -298,7 +297,9 @@ func (pi *ProcessInfo) scan() {
 			}
 
 			for _, file := range appFiles {
-				pi.addFile(file.Name(), entry.Name())
+				if strings.HasPrefix(filepath.Base(file.Name()), pi.baseName) {
+					pi.addFile(file.Name(), entry.Name())
+				}
 			}
 		} else {
 			pi.addFile(entry.Name(), "")
@@ -327,6 +328,7 @@ func (pi *ProcessInfo) Scan() {
 func (pi *ProcessInfo) AppsList() []*AppInfo {
 
 	p := make([]*AppInfo, 0)
+
 	for _, a := range pi.appsByPath {
 		p = append(p, a)
 	}

@@ -197,23 +197,18 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 
 	p := perfmon.pinfoPCM.AppsList()
 
-	d, err := perfmon.pinfoPCM.IssueCommand(p[0], "/pcm:pcieCounters")
+	d, err := perfmon.pinfoPCM.IssueCommand(p[0], "/pcm/pcie")
 	if err != nil {
 		tlog.DoPrintf("Error on command: %s\n", err)
 		return
 	}
-//	tlog.DoPrintf("Command data: %v\n", string(d))
 
-	type pcieSample struct {
-		Sample map[string]pcm.SampleData
-	}
-	ps := pcieSample{}
+	ps := pcm.PCIeSampleData{}
 
-	if err := json.Unmarshal(d, &ps.Sample); err != nil {
+	if err := json.Unmarshal(d, &ps); err != nil {
 		tlog.DoPrintf("unmarshal failed: %v\n", err)
 		return
 	}
-//	tlog.DoPrintf("\npcieSample: %+v\n", ps)
 
 	// Set the column headers for the PCIe data
 	for i, s := range []string{"Socket", "ReadCurr",
@@ -223,13 +218,12 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 	row++
 
 	// Put the counters in the tabel view
-	for k, sd := range ps.Sample {
-
-		tlog.DoPrintf("Key: %v, %+v\n", k, sd)
+	for i := 0; i < len(ps.Sockets); i++ {
+		sd := ps.Sockets[fmt.Sprintf("%d", i)]
 
 		// Add the Total PCI counter values in the table
 		s := sd.Total
-		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Total %s", k)), tview.AlignLeft)
+		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Total %d", i)), tview.AlignLeft)
 		SetCell(view, row, 1, cz.SkyBlue(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 		SetCell(view, row, 2, cz.SkyBlue(FormatUnits(s.ReadForOwnership)), tview.AlignRight)
 		SetCell(view, row, 3, cz.SkyBlue(FormatUnits(s.DemandCodeRd)), tview.AlignRight)
@@ -243,7 +237,7 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 
 		// Add the Missed PCI counter values in the table
 		s = sd.Miss
-		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Miss  %s", k)), tview.AlignLeft)
+		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Miss  %d", i)), tview.AlignLeft)
 		SetCell(view, row, 1, cz.SkyBlue(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 		SetCell(view, row, 2, cz.SkyBlue(FormatUnits(s.ReadForOwnership)), tview.AlignRight)
 		SetCell(view, row, 3, cz.SkyBlue(FormatUnits(s.DemandCodeRd)), tview.AlignRight)
@@ -257,7 +251,7 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 
 		// Add the cache Hit PCI counter values in the table
 		s = sd.Hit
-		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Hit   %s", k)), tview.AlignLeft)
+		SetCell(view, row, 0, cz.Orange(fmt.Sprintf("Hit   %d", i)), tview.AlignLeft)
 		SetCell(view, row, 1, cz.SkyBlue(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 		SetCell(view, row, 2, cz.SkyBlue(FormatUnits(s.ReadForOwnership)), tview.AlignRight)
 		SetCell(view, row, 3, cz.SkyBlue(FormatUnits(s.DemandCodeRd)), tview.AlignRight)
@@ -274,7 +268,7 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 	row++
 
 	// Add the Aggregate PCI counter values in the table
-	s := ps.Sample["aggregate"].Total
+	s := ps.Aggregate
 	SetCell(view, row, 0, cz.Orange("Aggregate"), tview.AlignLeft)
 	SetCell(view, row, 1, cz.Orange(FormatUnits(s.ReadCurrent)), tview.AlignRight)
 	SetCell(view, row, 2, cz.Orange(FormatUnits(s.ReadForOwnership)), tview.AlignRight)

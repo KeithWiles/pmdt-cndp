@@ -124,10 +124,10 @@ invalid_cmd(pinfo_client_t _c)
 static void
 perform_command(struct pinfo_client *c, pinfo_cb fn)
 {
-    pinfo_append(c, "{ \"%s\": ", c->cmd);
+//    pinfo_append(c, "{ \"%s\": ", c->cmd);
 
     int ret = fn(c);
-    pinfo_append(c, "}");
+//    pinfo_append(c, "}");
 
     if (ret < 0) {
         pinfo_append(c, "{null}");

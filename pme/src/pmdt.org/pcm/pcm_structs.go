@@ -177,6 +177,12 @@ type SampleData struct {
 	Hit   PCIEvents
 }
 
+// PCIeSampleData information
+type PCIeSampleData struct {
+	Sockets map[string]SampleData
+	Aggregate   PCIEvents
+}
+
 // SharedPCMCounters data region
 type SharedPCMCounters struct {
 	System SharedPCMSystem

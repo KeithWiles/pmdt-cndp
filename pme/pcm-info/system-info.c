@@ -217,7 +217,7 @@ pcieEvents(void *_c)
     struct pinfo_client *c = _c;
     struct Sample_s *ps;
 
-    pinfo_append(c, "{");
+    pinfo_append(c, "{\"sockets\": {");
     for(int i = 0; i < _shd->pcm.system.numOfSockets; i++) {
         ps = &_shd->sample[i];
 
@@ -233,7 +233,7 @@ pcieEvents(void *_c)
         pinfo_append(c, "}}%s",
             ((i + 1) < _shd->pcm.system.numOfSockets)? "," : "");
     }
-    pinfo_append(c, ", \"aggregate\": {");
+    pinfo_append(c, "}, \"aggregate\": {");
     pcie_events(c, &_shd->aggregate);
     pinfo_append(c, "}");
     pinfo_append(c, "}");
