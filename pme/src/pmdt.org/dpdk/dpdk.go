@@ -76,7 +76,6 @@ type AppInfo struct {
 	CoreList    string       // comma list of cores used by application
 	cmdLine     string       // Command line string
 	version     string       // DPDK version
-	fuseVersion string       // FUSE version
 	procType    string       // DPDK process type
 	socketCnt   string       // Number of sockets in the system
 	Ethdev      *Ethdev      // Ethdev information

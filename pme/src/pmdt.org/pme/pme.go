@@ -46,7 +46,6 @@ type PerfMonitor struct {
 	timers       *etimers.EventTimers
 	panels       []PanelInfo
 
-	pinfoDPDK    *pinfo.ProcessInfo
 	pinfoPCM     *pinfo.ProcessInfo
 }
 
@@ -98,12 +97,6 @@ func init() {
 	}
 
 	// Setup and locate the process info socket connections
-	perfmon.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
-	if perfmon.pinfoDPDK == nil {
-		panic("unable to setup pinfoDPDK")
-	}
-
-	// Setup and locate the process info socket connections
 	perfmon.pinfoPCM = pinfo.NewProcessInfo("/var/run/pcm-info", "pinfo")
 	if perfmon.pinfoPCM == nil {
 		panic("unable to setup pinfoPCM")
@@ -119,9 +112,6 @@ func Version() string {
 }
 
 func main() {
-
-	// Close the process info package on exit
-	defer perfmon.pinfoDPDK.Close()
 
 	cz.SetDefault("ivory", "", 0, 2, "")
 
@@ -241,11 +231,6 @@ func main() {
 		fmt.Printf("Waiting %d seconds for dlv to attach\n", options.WaitTime)
 		time.Sleep(time.Second * time.Duration(options.WaitTime))
 	}
-
-	if err := perfmon.pinfoDPDK.Open(); err != nil {
-		panic(err)
-	}
-	defer perfmon.pinfoDPDK.Close()
 
 	if err := perfmon.pinfoPCM.Open(); err != nil {
 		panic(err)

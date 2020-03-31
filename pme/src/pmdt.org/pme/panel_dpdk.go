@@ -13,6 +13,7 @@ import (
 	"github.com/rivo/tview"
 
 	"pmdt.org/graphdata"
+	"pmdt.org/pinfo"
 
 	cz "pmdt.org/colorize"
 	tab "pmdt.org/taborder"
@@ -42,6 +43,8 @@ type DPDKPanel struct {
 	totalRX   *tview.TextView
 	totalTX   *tview.TextView
 	dpdkQueue *tview.Table
+
+	pinfoDPDK *pinfo.ProcessInfo
 
 	data *rxtxData
 }
@@ -122,10 +125,10 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 		clearScrollTable(pg.dpdkQueue, pg.displayDPDKQueue, true)
 	})
 
-	perfmon.processInfo.Add("panel_dpdk", func(event int) {
+	pg.pinfoDPDK.Add("panel_dpdk", func(event int) {
 		names := make([]interface{}, 0)
 
-		for _, f := range perfmon.processInfo.Files() {
+		for _, f := range pg.pinfoDPDK.Files() {
 			names = append(names, filepath.Ext(f)[1:]) // Only display the PID
 		}
 		pg.selectApp.UpdateItem(-1, -1)
@@ -165,6 +168,12 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	pg.topFlex = flex0
 
+	// Setup and locate the telemery socket connections
+	pg.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
+	if pg.pinfoDPDK == nil {
+		panic("unable to setup pinfoDPDK")
+	}
+
 	// Time callback routine to dispaly or process data for the windows.
 	perfmon.timers.Add(dpdkPanelName, func(step int, ticks uint64) {
 		if pg.topFlex.HasFocus() {
@@ -182,7 +191,7 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 
 	pg.once.Do(func () {
-		pi := perfmon.processInfo
+		pi := pg.pinfoDPDK
 
 		a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
 		if a == nil {
@@ -229,11 +238,11 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 	w := -14
 
 	// Find the current selected application if any are available
-	a := perfmon.processInfo.AppInfoByIndex(pg.selectApp.ItemIndex())
+	a := pg.pinfoDPDK.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
 		return
 	}
-	info := perfmon.processInfo.Info(a)
+	info := pg.pinfoDPDK.Info(a)
 
 	// Set the speed/duplex and rate in the window
 	str := fmt.Sprintf("%s: %s, %s: %s\n",
@@ -257,7 +266,7 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 		return
 	}
 
-	pi := perfmon.processInfo
+	pi := pg.pinfoDPDK
 	a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
 		return
@@ -358,7 +367,7 @@ func (pg *DPDKPanel) displayDPDKQueue(view *tview.Table) {
 		return
 	}
 
-	pi := perfmon.processInfo
+	pi := pg.pinfoDPDK
 	a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
 		return
