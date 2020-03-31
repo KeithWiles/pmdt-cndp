@@ -143,13 +143,13 @@ func main() {
 
 	panels := []Panels{
 		ProcessPanelSetup,
-		CorePanelSetup,
-//		DPDKPanelSetup,
 		SysInfoPanelSetup,
-		PBFPanelSetup,
 		DevBindPanelSetup,
+		DPDKPanelSetup,
+		CorePanelSetup,
 		PCIPanelSetup,
 		QPIPanelSetup,
+		PBFPanelSetup,
 	}
 
 	// The bottom row has some info on where we are.

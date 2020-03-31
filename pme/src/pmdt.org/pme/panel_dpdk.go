@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright(c) 2019-2020 Intel Corporation
 
-// +build foo
-
 package main
 
 import (
-	"fmt"
+//	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -15,7 +13,7 @@ import (
 	"pmdt.org/graphdata"
 	"pmdt.org/pinfo"
 
-	cz "pmdt.org/colorize"
+//	cz "pmdt.org/colorize"
 	tab "pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )
@@ -125,6 +123,12 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 		clearScrollTable(pg.dpdkQueue, pg.displayDPDKQueue, true)
 	})
 
+	// Setup and locate the telemery socket connections
+	pg.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
+	if pg.pinfoDPDK == nil {
+		panic("unable to setup pinfoDPDK")
+	}
+
 	pg.pinfoDPDK.Add("panel_dpdk", func(event int) {
 		names := make([]interface{}, 0)
 
@@ -168,12 +172,6 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	pg.topFlex = flex0
 
-	// Setup and locate the telemery socket connections
-	pg.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
-	if pg.pinfoDPDK == nil {
-		panic("unable to setup pinfoDPDK")
-	}
-
 	// Time callback routine to dispaly or process data for the windows.
 	perfmon.timers.Add(dpdkPanelName, func(step int, ticks uint64) {
 		if pg.topFlex.HasFocus() {
@@ -197,7 +195,7 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 		if a == nil {
 			return
 		}
-
+/*
 		// Find the list of devices currently handled by the DPDK application
 		eth, err := pi.EthdevList(a)
 		if err != nil {
@@ -214,6 +212,7 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 				return
 			}
 		}
+*/
 	})
 
 	switch step {
@@ -235,13 +234,14 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 		return
 	}
 
-	w := -14
+//	w := -14
 
 	// Find the current selected application if any are available
 	a := pg.pinfoDPDK.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
 		return
 	}
+/*
 	info := pg.pinfoDPDK.Info(a)
 
 	// Set the speed/duplex and rate in the window
@@ -256,6 +256,7 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 
 	// Set the text into the window
 	view.SetText(str)
+*/
 }
 
 // Display some Network information about the DPDK application
@@ -265,7 +266,7 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 		tlog.DoPrintf("displayDPDKNet: view is nil\n")
 		return
 	}
-
+/*
 	pi := pg.pinfoDPDK
 	a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
@@ -356,6 +357,7 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 
 	pg.data.rxPoints.GraphPoints(0).AddPoint(mbpsRx/(1024.0 * 1024.0))
 	pg.data.txPoints.GraphPoints(0).AddPoint(mbpsTx/(1024.0 * 1024.0))
+*/
 }
 
 
@@ -366,7 +368,7 @@ func (pg *DPDKPanel) displayDPDKQueue(view *tview.Table) {
 		tlog.DoPrintf("displayDPDKNet: view is nil\n")
 		return
 	}
-
+/*
 	pi := pg.pinfoDPDK
 	a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
@@ -394,7 +396,7 @@ func (pg *DPDKPanel) displayDPDKQueue(view *tview.Table) {
 	for i, n := range queues {
 		setCell(row+i, col, cz.Orange(n), false)
 	}
-
+*/
 }
 
 // Display to update the graphs on the panel

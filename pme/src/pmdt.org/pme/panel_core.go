@@ -35,7 +35,7 @@ type PageCore struct {
 }
 
 const (
-	corePanelName string = "Cores"
+	corePanelName string = "CoreCounters"
 	maxCorePoints int    = 52
 )
 
