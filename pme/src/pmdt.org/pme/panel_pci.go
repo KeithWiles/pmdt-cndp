@@ -196,17 +196,20 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 	row := 0
 
 	p := perfmon.pinfoPCM.AppsList()
+	if len(p) == 0 {
+		return
+	}
 
 	d, err := perfmon.pinfoPCM.IssueCommand(p[0], "/pcm/pcie")
 	if err != nil {
-		tlog.DoPrintf("Error on command: %s\n", err)
+		tlog.ErrorPrintf("Error on command: %s\n", err)
 		return
 	}
 
 	ps := pcm.PCIeSampleData{}
 
 	if err := json.Unmarshal(d, &ps); err != nil {
-		tlog.DoPrintf("unmarshal failed: %v\n", err)
+		tlog.ErrorPrintf("unmarshal failed: %v\n", err)
 		return
 	}
 

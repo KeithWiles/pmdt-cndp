@@ -4,14 +4,15 @@
 package main
 
 import (
-//	"fmt"
+	"fmt"
 	"os/exec"
 
 	"github.com/rivo/tview"
-//	cz "pmdt.org/colorize"
+	cz "pmdt.org/colorize"
 	"pmdt.org/graphdata"
-//	"pmdt.org/pcm"
+	"pmdt.org/pcm"
 	"pmdt.org/taborder"
+	tlog "pmdt.org/ttylog"
 )
 
 // PageQPI - Data for main page information
@@ -22,13 +23,14 @@ type PageQPI struct {
 	topFlex    *tview.Flex
 	title      *tview.Box
 	qpi        *tview.Table
-	qpiCore    *tview.Table
 	qpiTotals  *tview.Table
 	qpiCharts  [2]*tview.TextView
 
-//	pcmState *pcm.SharedPCMState
+	system     pcm.System
+	header     pcm.Header
+	valid      bool
 
-	charts                *graphdata.GraphInfo
+	charts *graphdata.GraphInfo
 	qpiRedraw, coreRedraw bool
 }
 
@@ -47,6 +49,7 @@ func setupQPI() *PageQPI {
 		gd.SetMaxPoints(maxQPIPoints)
 	}
 	pg.charts.SetFieldWidth(9)
+	pg.valid = false
 
 	return pg
 }
@@ -60,29 +63,26 @@ func QPIPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	pg.tabOrder = to
 
 	flex0 := tview.NewFlex().SetDirection(tview.FlexRow)
-	flex1 := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex1 := tview.NewFlex().SetDirection(tview.FlexColumn)
 	flex2 := tview.NewFlex().SetDirection(tview.FlexColumn)
 
 	TitleBox(flex0)
 	pg.topFlex = flex0
 
-	pg.qpi = CreateTableView(flex1, "QPI (1)", tview.AlignLeft, 4, 1, true)
-
-	pg.qpiCore = CreateTableView(flex1, "QPI Core (2)", tview.AlignLeft, 24, 1, true)
-	pg.qpiCore.SetFixed(0, 1)
-
-	pg.qpiTotals = CreateTableView(flex1, "QPI Totals (3)", tview.AlignLeft, 5, 1, true)
+	pg.qpi = CreateTableView(flex1, "QPI (1)", tview.AlignLeft, 0, 1, true)
+	pg.qpi.SetSeparator(tview.Borders.Vertical)
+	pg.qpiTotals = CreateTableView(flex1, "QPI Totals (2)", tview.AlignLeft, 0, 1, true)
 	pg.qpiTotals.SetFixed(0, 0)
+	pg.qpiTotals.SetSeparator(tview.Borders.Vertical)
 
-	flex0.AddItem(flex1, 0, 5, true)
+	flex0.AddItem(flex1, 0, 1, true)
 
-	pg.qpiCharts[0] = CreateTextView(flex2, "QPI Charts (4)", tview.AlignLeft, 0, 1, true)
-	pg.qpiCharts[1] = CreateTextView(flex2, "QPI Charts (5)", tview.AlignLeft, 0, 1, true)
+	pg.qpiCharts[0] = CreateTextView(flex2, "QPI Charts (3)", tview.AlignLeft, 0, 1, true)
+	pg.qpiCharts[1] = CreateTextView(flex2, "QPI Charts (4)", tview.AlignLeft, 0, 1, true)
 
-	flex0.AddItem(flex2, 0, 3, true)
+	flex0.AddItem(flex2, 0, 2, true)
 
 	to.Add(pg.qpi, '1')
-	to.Add(pg.qpiCore, '2')
 	to.Add(pg.qpiTotals, '3')
 	to.Add(pg.qpiCharts[0], '4')
 	to.Add(pg.qpiCharts[1], '5')
@@ -109,13 +109,33 @@ func (pg *PageQPI) displayQPIPage(step int, ticks uint64) {
 
 	switch step {
 	case 0: // Display the data that was gathered
+		pg.staticQPIData()
+
 		pg.collectData()
 		pg.displayQPI(pg.qpi)
-		pg.displayQPICore(pg.qpiCore)
 		pg.displayQPITotals(pg.qpiTotals)
 		pg.displayCharts(pg.qpiCharts[0], 0, 0)
 		pg.displayCharts(pg.qpiCharts[1], 1, 1)
 	}
+}
+
+func (pg *PageQPI) staticQPIData() {
+
+	if pg.valid {
+		return
+	}
+
+	if err := perfmon.pinfoPCM.Unmarshal("/pcm/system", &pg.system); err != nil {
+		tlog.ErrorPrintf("Unable to get PCM system information\n")
+		return
+	}
+
+	if err := perfmon.pinfoPCM.Unmarshal("/pcm/header", &pg.header); err != nil {
+		tlog.ErrorPrintf("Unable to get PCM system information\n")
+		return
+	}
+
+	pg.valid = true
 }
 
 func (pg *PageQPI) collectData() {
@@ -137,122 +157,62 @@ func (pg *PageQPI) collectData() {
 
 func (pg *PageQPI) displayQPI(view *tview.Table) {
 
-	/*
-	state := pg.pcmState
-	sys := state.PCMCounters.System
+	sys := pg.system
+	hdr := pg.header
 
-	SetCell(view, 0, 0, fmt.Sprintf("%s: %s", cz.Wheat("PCM Version"), cz.SkyBlue(state.Header.Version)), tview.AlignLeft)
-	SetCell(view, 0, 1, fmt.Sprintf("%s: %sms", cz.Wheat("PollRate"), cz.SkyBlue(state.Header.PollMs)), tview.AlignLeft)
-	SetCell(view, 0, 2, fmt.Sprintf("%s: %sB", cz.Wheat("Size    "), cz.SkyBlue(perfmon.pcmData.Len())), tview.AlignLeft)
-	SetCell(view, 0, 3, fmt.Sprintf("%s: %s", cz.Wheat("CPU Model "), cz.SkyBlue(pcm.CPUModel(int(sys.CPUModel)))), tview.AlignLeft)
+	SetCell(view, 0, 0, fmt.Sprintf("%s: %s", cz.Wheat("PCM Version"), cz.SkyBlue(hdr.Version)), tview.AlignLeft)
+	SetCell(view, 0, 1, fmt.Sprintf("%s: %sms", cz.Wheat("PollRate"), cz.SkyBlue(hdr.PollMs)), tview.AlignLeft)
+	SetCell(view, 0, 2, fmt.Sprintf("%s: %s", cz.Wheat("CPU Model "), cz.SkyBlue(pcm.CPUModel(int(sys.CPUModel)))), tview.AlignLeft)
 
 	SetCell(view, 1, 0, fmt.Sprintf("%s: %s", cz.Wheat("NumCores   "), cz.SkyBlue(sys.NumOfCores)), tview.AlignLeft)
 	SetCell(view, 1, 1, fmt.Sprintf("%s: %s", cz.Wheat("Online  "), cz.SkyBlue(sys.NumOfOnlineCores)), tview.AlignLeft)
-	SetCell(view, 1, 2, fmt.Sprintf("%s: %s", cz.Wheat("QPILinks"), cz.SkyBlue(sys.NumOfQPILinksPerSocket)), tview.AlignLeft)
-	SetCell(view, 1, 3, fmt.Sprintf("%s: %s", cz.Wheat("NumSockets"), cz.SkyBlue(sys.NumOfSockets)), tview.AlignLeft)
-	SetCell(view, 1, 4, fmt.Sprintf("%s: %s", cz.Wheat("Online"), cz.SkyBlue(sys.NumOfOnlineSockets)), tview.AlignLeft)
-*/
+	SetCell(view, 1, 2, fmt.Sprintf("%s: %s", cz.Wheat("QPILinks  "), cz.SkyBlue(sys.NumOfQPILinksPerSocket)), tview.AlignLeft)
+	SetCell(view, 2, 0, fmt.Sprintf("%s: %s", cz.Wheat("NumSockets "), cz.SkyBlue(sys.NumOfSockets)), tview.AlignLeft)
+	SetCell(view, 2, 1, fmt.Sprintf("%s: %s", cz.Wheat("Online  "), cz.SkyBlue(sys.NumOfOnlineSockets)), tview.AlignLeft)
+
 	if pg.qpiRedraw {
 		pg.qpiRedraw = false
 		view.ScrollToBeginning()
 	}
 }
 
-func (pg *PageQPI) displayQPICore(view *tview.Table) {
-/*
-	row := 0
+func (pg *PageQPI) fillQPITable(view *tview.Table, row int, sCntr []pcm.QPISocketCounter) int {
+
 	col := 0
-	num := int(pg.pcmState.PCMCounters.System.NumOfOnlineCores)
-	core := pg.pcmState.PCMCounters.Core.Cores
-	label := []string{
-		"CoreID:", "SocketID:", "", "IPC:", "Cycles:", "Retired:", "Exec:", "R-Freq:",
-		"L3CacheMiss:", "L3CacheRef:", "L2CacheMiss:", "L3CacheHit:", "L2CacheHit:",
-		"L2CacheMPI:", "L2CacheMPIHit:", "L3CacheOccAvail:", "L3CacheOcc:",
-		"LocalMemoryBW:", "RemoteMemoryBW:", "LocalMemeoryAcc:", "RemoteMAcc:", "ThermalHR:",
-	}
-	for i, t := range label {
-		SetCell(view, row+i, col, cz.Wheat(t))
-	}
-	col++
-
-	for i, j := 0, row; i < num; i++ {
-		SetCell(view, j+0, col, cz.SkyBlue(core[i].CoreID))
-		SetCell(view, j+1, col, cz.SkyBlue(core[i].SocketID))
-
-		SetCell(view, j+3, col, cz.SkyBlue(core[i].InstructionsPerCycles, 10))
-		SetCell(view, j+4, col, cz.SkyBlue(core[i].Cycles, 10))
-		SetCell(view, j+5, col, cz.SkyBlue(core[i].InstructionsRetired))
-		SetCell(view, j+6, col, cz.SkyBlue(core[i].ExecUsage))
-		SetCell(view, j+7, col, cz.SkyBlue(core[i].RelativeFrequency))
-		SetCell(view, j+8, col, cz.SkyBlue(core[i].L3CacheMisses))
-		SetCell(view, j+9, col, cz.SkyBlue(core[i].L3CacheReference))
-		SetCell(view, j+10, col, cz.SkyBlue(core[i].L2CacheMisses))
-		SetCell(view, j+11, col, cz.SkyBlue(core[i].L3CacheHitRatio))
-		SetCell(view, j+12, col, cz.SkyBlue(core[i].L2CacheHitRatio))
-		SetCell(view, j+13, col, cz.SkyBlue(core[i].L2CacheMPI))
-		SetCell(view, j+14, col, cz.SkyBlue(core[i].L2CacheHitRatio))
-		SetCell(view, j+15, col, cz.SkyBlue(core[i].L3CacheOccupancyAvailable))
-		SetCell(view, j+16, col, cz.SkyBlue(core[i].L3CacheOccupancy))
-		if core[i].LocalMemoryBWAvailable {
-			SetCell(view, j+17, col, cz.SkyBlue(core[i].LocalMemoryBW))
-		} else {
-			SetCell(view, j+17, col, cz.SkyBlue("disabled"))
-		}
-		if core[i].RemoteMemoryBWAvailable {
-			SetCell(view, j+18, col, cz.SkyBlue(core[i].RemoteMemoryBW))
-		} else {
-			SetCell(view, j+18, col, cz.SkyBlue("disabled"))
-		}
-		SetCell(view, j+19, col, cz.SkyBlue(core[i].LocalMemoryAccesses))
-		SetCell(view, j+20, col, cz.SkyBlue(core[i].RemoteMemoryAccesses))
-		SetCell(view, j+21, col, cz.SkyBlue(core[i].ThermalHeadroom))
+	for i := 0; i < len(sCntr); i++ {
+		SetCell(view, row, col, cz.Wheat(fmt.Sprintf("Socket %d", sCntr[i].SocketID)), tview.AlignRight)
 		col++
+		SetCell(view, row, col+3, cz.SkyBlue(sCntr[i].Total, 10))
+		for k := 0; k < len(sCntr[i].Links); k++ {
+			SetCell(view, row, col, cz.SkyBlue(k), tview.AlignCenter)
+			SetCell(view, row, col+1, cz.SkyBlue(sCntr[i].Links[k].Bytes, 10))
+			SetCell(view, row, col+2, cz.SkyBlue(sCntr[i].Links[k].Utilization, 6, 6))
+			row++
+		}
+		col = 0
 	}
-	*/
+	return row
 }
 
 func (pg *PageQPI) displayQPITotals(view *tview.Table) {
-/*
-	qpi := pg.pcmState.PCMCounters.QPI
 
-	row := 0
-	col := 0
-
-	num := int(pg.pcmState.PCMCounters.System.NumOfSockets)
-	SetCell(view, row, 0, "    ") // Add some space between the results
-	SetCell(view, row, 3, "    ") // Add some space between the results
-	if qpi.IncomingQPITrafficMetricsAvailable {
-		col = 1
-		num = int(pg.pcmState.PCMCounters.System.NumOfSockets)
-		for i := 0; i < num; i++ {
-			SetCell(view, row+i, col, cz.Wheat(fmt.Sprintf("Socket %d IN Count:", i)))
-		}
-		for i := 0; i < num; i++ {
-			SetCell(view, row+i, col+1, cz.SkyBlue(qpi.Incoming[i].Total))
-		}
-		row += num
-		SetCell(view, row, col, cz.Wheat("Total:"))
-		SetCell(view, row, col+1, cz.SkyBlue(qpi.IncomingTotal))
+	qpi := pcm.QPI{}
+	if err := perfmon.pinfoPCM.Unmarshal("/pcm/qpi", &qpi); err != nil {
+		tlog.ErrorPrintf("Unable to get QPI Totals: %v\n", err)
+		return
 	}
 
-	if qpi.OutgoingQPITrafficMetricsAvailable {
-		row = 0
-		col = 4
-		num = int(pg.pcmState.PCMCounters.System.NumOfSockets)
-
-		for i := 0; i < num; i++ {
-			SetCell(view, row+i, col, cz.Wheat(fmt.Sprintf("Socket %d OUT Count:", i)))
-		}
-		for i := 0; i < num; i++ {
-			SetCell(view, row+i, col+1, cz.SkyBlue(qpi.Outgoing[i].Total))
-		}
-		row += num
-		SetCell(view, row, col, cz.Wheat("Total:"))
-		SetCell(view, row, col+1, cz.SkyBlue(qpi.OutgoingTotal))
+	for i, s := range []string{ "Incoming QPI", "LinkID", "Bytes", "Utilization", "Total" } {
+		SetCell(view, 0, i, cz.Orange(s), tview.AlignRight)
 	}
 
-	row += num
-*/
+	row := pg.fillQPITable(view, 1, qpi.Incoming)
+
+	SetCell(view, row, 0, cz.Orange("Outgoing QPI"))
+	row++
+
+	pg.fillQPITable(view, row, qpi.Outgoing)
+
 	if pg.coreRedraw {
 		pg.coreRedraw = false
 		view.ScrollToBeginning()

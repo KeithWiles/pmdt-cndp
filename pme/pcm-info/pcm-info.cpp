@@ -542,14 +542,15 @@ namespace PCMDaemon {
 
 	void Daemon::getPCMQPI()
 	{
-//		PCMQPI& qpi = sharedPCMState_->pcm.qpi;
-
 		const uint32 numSockets = sharedPCMState_->pcm.system.numOfSockets;
 		const uint32 numLinksPerSocket = sharedPCMState_->pcm.system.numOfQPILinksPerSocket;
 
 		sharedPCMState_->pcm.qpi.incomingQPITrafficMetricsAvailable = pcmInstance_->incomingQPITrafficMetricsAvailable();
-        if (debugMode_)
-            std::cout << "incomingQPITrafficMetricsAvailable " << sharedPCMState_->pcm.qpi.incomingQPITrafficMetricsAvailable << std::endl;
+        if (debugMode_) {
+            std::cout << "incomingQPITrafficMetricsAvailable " << sharedPCMState_->pcm.qpi.incomingQPITrafficMetricsAvailable;
+            std::cout << "  (" << &sharedPCMState_->pcm.qpi.incomingQPITrafficMetricsAvailable << ")" << std::endl;
+        }
+
 		if (sharedPCMState_->pcm.qpi.incomingQPITrafficMetricsAvailable) {
 			uint32 onlineSocketsI(0);
 
@@ -576,8 +577,10 @@ namespace PCMDaemon {
 		}
 
 		sharedPCMState_->pcm.qpi.outgoingQPITrafficMetricsAvailable = pcmInstance_->outgoingQPITrafficMetricsAvailable();
-        if (debugMode_)
-            std::cout << "outgoingQPITrafficMetricsAvailable " << sharedPCMState_->pcm.qpi.outgoingQPITrafficMetricsAvailable << std::endl;
+        if (debugMode_) {
+            std::cout << "outgoingQPITrafficMetricsAvailable " << sharedPCMState_->pcm.qpi.outgoingQPITrafficMetricsAvailable;
+            std::cout << "  (" << &sharedPCMState_->pcm.qpi.outgoingQPITrafficMetricsAvailable << ")" << std::endl;
+        }
 		if (sharedPCMState_->pcm.qpi.outgoingQPITrafficMetricsAvailable) {
 			uint32 onlineSocketsI(0);
 

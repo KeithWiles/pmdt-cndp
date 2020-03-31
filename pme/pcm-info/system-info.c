@@ -22,16 +22,34 @@
 static SharedPCMState *_shd;
 
 static int
+headerInfo(void *_c)
+{
+    struct pinfo_client *c = _c;
+
+    pinfo_append(c, "{");
+    pinfo_append(c, "\"version\": \"%s\",", _shd->hdr.version);
+    pinfo_append(c, "\"tscBegin\": %u,", _shd->hdr.tscBegin);
+    pinfo_append(c, "\"tscEnd\": %u,", _shd->hdr.tscEnd);
+    pinfo_append(c, "\"cyclesToGetState\": %u,", _shd->hdr.cyclesToGetPCMState);
+    pinfo_append(c, "\"timestamp\": %u,", _shd->hdr.timestamp);
+    pinfo_append(c, "\"socketfd\": %u,", _shd->hdr.socketfd);
+    pinfo_append(c, "\"pollMs\": %u", _shd->hdr.pollMs);
+    pinfo_append(c, "}");
+
+    return 0;
+}
+
+static int
 systemInfo(void *_c)
 {
     struct pinfo_client *c = _c;
 
     pinfo_append(c, "{");
-    pinfo_append(c, "\"numOfCores\": %u, ", _shd->pcm.system.numOfCores);
-    pinfo_append(c, "\"numOfOnlineCores\": %u, ", _shd->pcm.system.numOfOnlineCores);
-    pinfo_append(c, "\"numOfSockets\": %u, ", _shd->pcm.system.numOfSockets);
-    pinfo_append(c, "\"numOfOnlineSockets\": %u, ", _shd->pcm.system.numOfOnlineSockets);
-    pinfo_append(c, "\"numOfQPILinksPerSocket\": %u, ", _shd->pcm.system.numOfQPILinksPerSocket);
+    pinfo_append(c, "\"numOfCores\": %u,", _shd->pcm.system.numOfCores);
+    pinfo_append(c, "\"numOfOnlineCores\": %u,", _shd->pcm.system.numOfOnlineCores);
+    pinfo_append(c, "\"numOfSockets\": %u,", _shd->pcm.system.numOfSockets);
+    pinfo_append(c, "\"numOfOnlineSockets\": %u,", _shd->pcm.system.numOfOnlineSockets);
+    pinfo_append(c, "\"numOfQPILinksPerSocket\": %u,", _shd->pcm.system.numOfQPILinksPerSocket);
     pinfo_append(c, "\"cpuModel\": %u", _shd->pcm.system.cpuModel);
     pinfo_append(c, "}");
 
@@ -55,29 +73,29 @@ pcmCore(void *_c)
     cc = &_shd->pcm.core.cores[core];
 
     pinfo_append(c, "{");
-    pinfo_append(c, "\"coreId\": %lu, ", cc->coreId);
-    pinfo_append(c, "\"socketId\": %lu, ", cc->socketId);
-    pinfo_append(c, "\"instructionsPerCycle\": %f, ", cc->instructionsPerCycle);
-    pinfo_append(c, "\"cycles\": %lu, ", cc->cycles);
-    pinfo_append(c, "\"instructionsRetired\": %lu, ", cc->instructionsRetired);
-    pinfo_append(c, "\"execUsage\": %f, ", cc->execUsage);
-    pinfo_append(c, "\"relativeFrequency\": %f, ", cc->relativeFrequency);
-    pinfo_append(c, "\"activeRelativeFrequency\": %f, ", cc->activeRelativeFrequency);
-    pinfo_append(c, "\"l3CacheMisses\": %lu, ", cc->l3CacheMisses);
-    pinfo_append(c, "\"l3CacheReference\": %lu, ", cc->l3CacheReference);
-    pinfo_append(c, "\"l2CacheMisses\": %lu, ", cc->l2CacheMisses);
-    pinfo_append(c, "\"l3CacheHitRatio\": %f, ", isnan(cc->l3CacheHitRatio)? 0.0 : cc->l3CacheHitRatio);
-    pinfo_append(c, "\"l2CacheHitRatio\": %f, ", cc->l2CacheHitRatio);
-    pinfo_append(c, "\"l3CacheMPI\": %f, ", cc->l3CacheMPI);
-    pinfo_append(c, "\"l2CacheMPI\": %f, ", cc->l2CacheMPI);
-    pinfo_append(c, "\"l3CacheOccupancyAvailable\": %s, ", cc->l3CacheOccupancyAvailable? "true" : "false");
-    pinfo_append(c, "\"l3CacheOccupancy\": %lu, ", cc->l3CacheOccupancy);
-    pinfo_append(c, "\"localMemoryBWAvailable\": %s, ", cc->localMemoryBWAvailable? "true" : "false");
-    pinfo_append(c, "\"localMemoryBW\": %lu, ", cc->localMemoryBW);
-    pinfo_append(c, "\"remoteMemoryBWAvailable\": %s, ", cc->remoteMemoryBWAvailable? "true" : "false");
-    pinfo_append(c, "\"remoteMemoryBW\": %lu, ", cc->remoteMemoryBW);
-    pinfo_append(c, "\"localMemoryAccesses\": %lu, ", cc->localMemoryAccesses);
-    pinfo_append(c, "\"remoteMemoryAccesses\": %lu, ", cc->remoteMemoryAccesses);
+    pinfo_append(c, "\"coreId\": %lu,", cc->coreId);
+    pinfo_append(c, "\"socketId\": %lu,", cc->socketId);
+    pinfo_append(c, "\"instructionsPerCycle\": %f,", cc->instructionsPerCycle);
+    pinfo_append(c, "\"cycles\": %lu,", cc->cycles);
+    pinfo_append(c, "\"instructionsRetired\": %lu,", cc->instructionsRetired);
+    pinfo_append(c, "\"execUsage\": %f,", cc->execUsage);
+    pinfo_append(c, "\"relativeFrequency\": %f,", cc->relativeFrequency);
+    pinfo_append(c, "\"activeRelativeFrequency\": %f,", cc->activeRelativeFrequency);
+    pinfo_append(c, "\"l3CacheMisses\": %lu,", cc->l3CacheMisses);
+    pinfo_append(c, "\"l3CacheReference\": %lu,", cc->l3CacheReference);
+    pinfo_append(c, "\"l2CacheMisses\": %lu,", cc->l2CacheMisses);
+    pinfo_append(c, "\"l3CacheHitRatio\": %f,", isnan(cc->l3CacheHitRatio)? 0.0 : cc->l3CacheHitRatio);
+    pinfo_append(c, "\"l2CacheHitRatio\": %f,", cc->l2CacheHitRatio);
+    pinfo_append(c, "\"l3CacheMPI\": %f,", cc->l3CacheMPI);
+    pinfo_append(c, "\"l2CacheMPI\": %f,", cc->l2CacheMPI);
+    pinfo_append(c, "\"l3CacheOccupancyAvailable\": %s,", cc->l3CacheOccupancyAvailable? "true" : "false");
+    pinfo_append(c, "\"l3CacheOccupancy\": %lu,", cc->l3CacheOccupancy);
+    pinfo_append(c, "\"localMemoryBWAvailable\": %s,", cc->localMemoryBWAvailable? "true" : "false");
+    pinfo_append(c, "\"localMemoryBW\": %lu,", cc->localMemoryBW);
+    pinfo_append(c, "\"remoteMemoryBWAvailable\": %s,", cc->remoteMemoryBWAvailable? "true" : "false");
+    pinfo_append(c, "\"remoteMemoryBW\": %lu,", cc->remoteMemoryBW);
+    pinfo_append(c, "\"localMemoryAccesses\": %lu,", cc->localMemoryAccesses);
+    pinfo_append(c, "\"remoteMemoryAccesses\": %lu,", cc->remoteMemoryAccesses);
     pinfo_append(c, "\"thermalHeadroom\": %lu", cc->thermalHeadroom);
     pinfo_append(c, "}");
 
@@ -158,36 +176,39 @@ qpiCounters(void *_c)
     pinfo_append(c, "\"outgoingQPITrafficMetricsAvailable\": %s,",
         _shd->pcm.qpi.outgoingQPITrafficMetricsAvailable? "true" : "false");
 
-    pinfo_append(c, "\"incoming\": {");
+    pinfo_append(c, "\"incomingTotal\": %lu,", _shd->pcm.qpi.incomingTotal);
+    pinfo_append(c, "\"outgoingTotal\": %lu,", _shd->pcm.qpi.outgoingTotal);
+
+    pinfo_append(c, "\"incoming\": [");
     for(int i = 0; i < _shd->pcm.system.numOfSockets; i++) {
-        pinfo_append(c, "\"%d\": { \"total\": %lu, \"incomingTotal\": %lu, \"links\": {",
-            i, _shd->pcm.qpi.incoming[i].total, _shd->pcm.qpi.incomingTotal);
+        pinfo_append(c, "{\"socketID\": %d, \"total\": %lu, \"links\": [",
+            i, _shd->pcm.qpi.incoming[i].total);
         for(int j = 0; j < _shd->pcm.system.numOfQPILinksPerSocket; j++) {
-            pinfo_append(c, "\"%d\": {\"bytes\": %lu, \"utilization\": %lf}%s", j,
+            pinfo_append(c, "{\"linkID\": %d, \"bytes\": %lu, \"utilization\": %lf}%s", j,
                 _shd->pcm.qpi.incoming[i].links[j].bytes,
                 _shd->pcm.qpi.incoming[i].links[j].utilization,
                 ((j + 1) < _shd->pcm.system.numOfQPILinksPerSocket)? "," : "");
         }
-        pinfo_append(c, "}");
+        pinfo_append(c, "]");
         pinfo_append(c, "}%s", ((i + 1) < _shd->pcm.system.numOfSockets)? "," : "");
     }
-    pinfo_append(c, "},");
+    pinfo_append(c, "],");
 
-    pinfo_append(c, "\"outgoing\": {");
+    pinfo_append(c, "\"outgoing\": [");
     for(int i = 0; i < _shd->pcm.system.numOfSockets; i++) {
-        pinfo_append(c, "\"%d\": { \"total\": %lu, \"incomingTotal\": %lu, \"links\": {",
-            i, _shd->pcm.qpi.outgoing[i].total, _shd->pcm.qpi.outgoingTotal);
+        pinfo_append(c, "{\"socketID\": %d, \"total\": %lu, \"links\": [",
+            i, _shd->pcm.qpi.outgoing[i].total);
         for(int j = 0; j < _shd->pcm.system.numOfQPILinksPerSocket; j++) {
-            pinfo_append(c, "\"%d\": {\"bytes\": %lu, \"utilization\": %lf}%s", j,
+            pinfo_append(c, "{\"linkID\": %d, \"bytes\": %lu, \"utilization\": %lf}%s", j,
                 _shd->pcm.qpi.outgoing[i].links[j].bytes,
                 _shd->pcm.qpi.outgoing[i].links[j].utilization,
                 ((j + 1) < _shd->pcm.system.numOfQPILinksPerSocket)? "," : "");
         }
-        pinfo_append(c, "}");
+        pinfo_append(c, "]");
         pinfo_append(c, "}%s", ((i + 1) < _shd->pcm.system.numOfSockets)? "," : "");
     }
 
-    pinfo_append(c, "}");
+    pinfo_append(c, "]");
     pinfo_append(c, "}");
     return 0;
 }
@@ -246,6 +267,7 @@ setupInfo(void *_s)
 {
     _shd = _s;
 
+    pinfo_register("/pcm/header", headerInfo);
     pinfo_register("/pcm/system", systemInfo);
     pinfo_register("/pcm/core", pcmCore);
     pinfo_register("/pcm/memory", memoryCounters);

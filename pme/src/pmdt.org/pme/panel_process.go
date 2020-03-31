@@ -68,6 +68,7 @@ func ProcessPanelSetup(nextSlide func()) (pageName string, content tview.Primiti
 
 	pg.process1 = CreateTableView(flex2, "Process Info (1)", tview.AlignLeft, 0, 2, false)
 	pg.process2 = CreateTableView(flex2, "Process Info (2)", tview.AlignLeft, 0, 2, false)
+	pg.process2.SetSeparator(tview.Borders.Vertical)
 
 	to.Add(pg.selectApp.table, 'p')
 	to.Add(pg.cmdline, 'c')

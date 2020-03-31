@@ -404,3 +404,29 @@ func (pi *ProcessInfo) IssueCommand(a *AppInfo, str string) ([]byte, error) {
 
 	return pi.doCmd(a, str)
 }
+
+// Unmarshal the JSON data into a structure
+func (pi *ProcessInfo) Unmarshal(command string, data interface{}) error {
+
+	p := pi.AppsList()
+	if len(p) == 0 {
+		return fmt.Errorf("No PCM data")
+	}
+
+	d, err := pi.IssueCommand(p[0], command)
+	if err != nil {
+		return err
+	}
+
+	if err := json.Unmarshal(d, data); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Marshal the structure into a JSON string
+func (pi *ProcessInfo) Marshal(data interface{}) ([]byte, error) {
+
+	return json.MarshalIndent(data, "", "  ")
+}

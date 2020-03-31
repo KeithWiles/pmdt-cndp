@@ -94,6 +94,7 @@ func PBFPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 
 	pg.pbf = CreateTableView(flex1, "Power Base Frequency (p)", tview.AlignLeft, 0, 2, true)
 	pg.pbf.SetFixed(1, 0)
+	pg.pbf.SetSeparator(tview.Borders.Vertical)
 
 	flex0.AddItem(flex1, 0, 3, true)
 
@@ -155,16 +156,16 @@ func (pg *PagePBF) collectChartData() {
 func (pg *PagePBF) displayPBF(view *tview.Table) {
 
 	// create the headers for each column
-	SetCell(pg.pbf, 0, 0, cz.Orange("CPU"))
-	SetCell(pg.pbf, 0, 1, cz.Orange("Max"))
-	SetCell(pg.pbf, 0, 2, cz.Orange("Min"))
-	SetCell(pg.pbf, 0, 3, cz.Orange("Curr"))
-	SetCell(pg.pbf, 0, 4, cz.Orange("Governor"))
+	SetCell(pg.pbf, 0, 0, cz.Orange("CPU", 4))
+	SetCell(pg.pbf, 0, 1, cz.Orange("Max", 6))
+	SetCell(pg.pbf, 0, 2, cz.Orange("Min", 6))
+	SetCell(pg.pbf, 0, 3, cz.Orange("Curr", 6))
+	SetCell(pg.pbf, 0, 4, cz.Orange("Governor", 10))
 
 	// Display the CState names as columns
 	p := pbf.InfoPerCPU(0)
 	for j, v := range p.CStateNames {
-		SetCell(pg.pbf, 0, 5+j, cz.Orange(v))
+		SetCell(pg.pbf, 0, 5+j, cz.Orange(v, 6))
 	}
 
 	// For the number of CPUs display the data one CPU per line
@@ -179,7 +180,7 @@ func (pg *PagePBF) displayPBF(view *tview.Table) {
 
 		// Output the CStates per CPU per line
 		for j, v := range p.CStates {
-			SetCell(pg.pbf, i+1, 5+j, cz.LightGreen(v))
+			SetCell(pg.pbf, i+1, 5+j, cz.LightGreen(v, 6))
 		}
 	}
 }

@@ -153,6 +153,7 @@ func main() {
 
 	panels := []Panels{
 		ProcessPanelSetup,
+		CorePanelSetup,
 //		DPDKPanelSetup,
 		SysInfoPanelSetup,
 		PBFPanelSetup,
