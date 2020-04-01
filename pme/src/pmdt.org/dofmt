@@ -3,29 +3,11 @@
 (cd colorize; go fmt)
 (cd devbind; go fmt)
 (cd dpdk; go fmt)
-(cd encoding/raw; go fmt)
 (cd etimers; go fmt)
 (cd graphdata; go fmt)
-(cd hexdump; go fmt)
 (cd intel-pbf; go fmt)
-(cd jevents; go fmt)
 (cd pcm; go fmt)
-(cd perfdata; go fmt)
 (cd pinfo; go fmt)
 (cd pme; go fmt)
-(cd profiles; go fmt)
-(cd semaphore; go fmt)
 (cd taborder; go fmt)
 (cd ttylog; go fmt)
-#
-#go fmt pmdt.org/devgroup
-#go fmt pmdt.org/listevents
-#go fmt pmdt.org/prometheus-client
-#go fmt pmdt.org/showevent
-#go fmt pmdt.org/asciichart
-#go fmt pmdt.org/devgroup
-#go fmt pmdt.org/walk
-#go fmt pmdt.org/jestat
-#go fmt github.com/shirou
-#go fmt pmdt.org/intel-pbf
-#go fmt pmdt.org/perf

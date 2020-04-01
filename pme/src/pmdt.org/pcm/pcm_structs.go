@@ -3,207 +3,147 @@
 
 package pcm
 
-import ()
-
-// PCM system constants
-const (
-	Version              string = "1.0.6"
-	MaxCPUCores          int    = 256
-	MaxSockets           int    = 8
-	QPIMaxLinks          int    = 32 // (MaxSockets * 4)
-	MemoryMaxIMCChannels int    = 8
-
-	MemoryRead        int = 0
-	MemoryWrite       int = 1
-	MemoryReadRankA   int = 0
-	MemoryWriteRankA  int = 1
-	MemoryReadRankB   int = 2
-	MemoryWwriteRankB int = 3
-	MemoryPartial     int = 2
-
-	VersionSize int = 12
-)
-
-// SharedPCMSystem information
-type SharedPCMSystem struct {
-	NumOfCores             uint64
-	NumOfOnlineCores       uint64
-	NumOfSockets           uint64
-	NumOfOnlineSockets     uint64
-	NumOfQPILinksPerSocket uint64
-	CPUModel               uint64
-	System0                [2]uint64
+// System information
+type System struct {
+	NumOfCores             uint64 `json:"numOfCores"`
+	NumOfOnlineCores       uint64 `json:"numOfOnlineCores"`
+	NumOfSockets           uint64 `json:"numOfSockets"`
+	NumOfOnlineSockets     uint64 `json:"numOfOnlineSockets"`
+	NumOfQPILinksPerSocket uint64 `json:"numOfQPILinksPerSocket"`
+	CPUModel               uint64 `json:"cpuModel"`
 }
 
-// SharedPCMCoreCounter information
-type SharedPCMCoreCounter struct {
-	CoreID                    uint64
-	SocketID                  int64
-	L3CacheOccupancyAvailable bool
-	LocalMemoryBWAvailable    bool
-	RemoteMemoryBWAvailable   bool
-	Filler0                   [5]byte
-	InstructionsPerCycles     float64
-	Cycles                    uint64
-	InstructionsRetired       uint64
-	ExecUsage                 float64
-	RelativeFrequency         float64
-	ActiveRelativeFrequency   float64
-	L3CacheMisses             uint64
-	L3CacheReference          uint64
-	L2CacheMisses             uint64
-	L3CacheHitRatio           float64
-	L2CacheHitRatio           float64
-	L3CacheMPI                float64
-	L2CacheMPI                float64
-	L3CacheOccupancy          uint64
-	LocalMemoryBW             uint64
-	RemoteMemoryBW            uint64
-	LocalMemoryAccesses       uint64
-	RemoteMemoryAccesses      uint64
-	ThermalHeadroom           uint64
-	Filler1                   [2]uint64
+// CoreCounters information
+type CoreCounters struct {
+	CoreID                    uint64  `json:"coreId"`
+	SocketID                  int64   `json:"socketId"`
+	L3CacheOccupancyAvailable bool    `json:"l3CacheOccupancyAvailable"`
+	LocalMemoryBWAvailable    bool    `json:"localMemoryBWAvailable"`
+	RemoteMemoryBWAvailable   bool    `json:"remoteMemoryBWAvailable"`
+	InstructionsPerCycle      float64 `json:"instructionsPerCycle"`
+	Cycles                    uint64  `json:"cycles"`
+	InstructionsRetired       uint64  `json:"instructionsRetired"`
+	ExecUsage                 float64 `json:"execUsage"`
+	RelativeFrequency         float64 `json:"relativeFrequency"`
+	ActiveRelativeFrequency   float64 `json:"activeRelativeFrequency"`
+	L3CacheMisses             uint64  `json:"l3CacheMisses"`
+	L3CacheReference          uint64  `json:"l3CacheReference"`
+	L2CacheMisses             uint64  `json:"l2CacheMisses"`
+	L3CacheHitRatio           float64 `json:"l3CacheHitRatio"`
+	L2CacheHitRatio           float64 `json:"l2CacheHitRatio"`
+	L3CacheMPI                float64 `json:"l3CacheMPI"`
+	L2CacheMPI                float64 `json:"l2CacheMPI"`
+	L3CacheOccupancy          uint64  `json:"l3CacheOccupancy"`
+	LocalMemoryBW             uint64  `json:"localMemoryBW"`
+	RemoteMemoryBW            uint64  `json:"remoteMemoryBW"`
+	LocalMemoryAccesses       uint64  `json:"localMemoryAccesses"`
+	RemoteMemoryAccesses      uint64  `json:"remoteMemoryAccesses"`
+	ThermalHeadroom           uint64  `json:"thermalHeadroom"`
 }
 
-// SharedPCMCore information
-type SharedPCMCore struct {
-	Cores                         [MaxCPUCores]SharedPCMCoreCounter
-	PackageEnergyMetricsAvailable bool
-	Filler0                       [7]byte
-	Filler7                       [7]uint64
-	EnergyUsedBySockets           [MaxSockets]float64
+// SocketEnergy information
+type SocketEnergy struct {
+	PackageEnergyMetricsAvailable bool      `json:"packageEnergyMetricsAvailable"`
+	EnergyUsedBySockets           []float64 `json:"energyUsedBySockets"`
 }
 
-// SharedPCMMemoryChannelCounter information
-type SharedPCMMemoryChannelCounter struct {
-	Read            float64
-	Write           float64
-	Total           float64
-	MemChnlCounter0 [5]uint64
+// MemoryChannelCounter information
+type MemoryChannelCounter struct {
+	Read  float64 `json:"read"`
+	Write float64 `json:"write"`
+	Total float64 `json:"total"`
 }
 
-// SharedPCMMemorySocketCounter information
-type SharedPCMMemorySocketCounter struct {
-	SocketID     uint64
-	MemSockCntr0 [7]uint64
-	Channels     [MemoryMaxIMCChannels]SharedPCMMemoryChannelCounter
-	Read         float64
-	Write        float64
-	PartialWrite float64
-	Total        float64
-	DramEnergy   float64
-	MemSockCntr1 [3]uint64
+// MemorySocketCounter information
+type MemorySocketCounter struct {
+	SocketID     uint64                 `json:"socketId"`
+	Channels     []MemoryChannelCounter `json:"channels"`
+	Read         float64                `json:"read"`
+	Write        float64                `json:"write"`
+	PartialWrite float64                `json:"partialWrite"`
+	Total        float64                `json:"total"`
+	DramEnergy   float64                `json:"dramEnergy"`
 }
 
-// SharedPCMMemorySystemCounter information
-type SharedPCMMemorySystemCounter struct {
-	Read        float64
-	Write       float64
-	Total       float64
-	MemSysCntr0 [5]uint64
+// MemorySystemCounter information
+type MemorySystemCounter struct {
+	Read  float64 `json:"read"`
+	Write float64 `json:"write"`
+	Total float64 `json:"total"`
 }
 
 // SharedPCMMemory information
 type SharedPCMMemory struct {
-	Sockets                    [MaxSockets]SharedPCMMemorySocketCounter
-	System                     SharedPCMMemorySystemCounter
-	DramEnergyMetricsAvailable bool
-	Mem1                       bool
-	Mem2                       bool
-	Mem3                       bool
-	Mem4                       bool
-	Mem5                       bool
-	Mem6                       bool
-	Mem7                       bool
-	Memory0                    [7]uint64
+	Sockets                    []MemorySocketCounter `json:"sockets"`
+	System                     MemorySystemCounter   `json:"system"`
+	DramEnergyMetricsAvailable bool                  `json:"dramEnergyMetricsAvailable"`
 }
 
-// SharedPCMQPILinkCounter information
-type SharedPCMQPILinkCounter struct {
-	Bytes       uint64
-	Utilization float64
-	QPILink0    [6]uint64
+// QPILinkCounter information
+type QPILinkCounter struct {
+	LinkID      uint64  `json:"linkId"`
+	Bytes       uint64  `json:"bytes"`
+	Utilization float64 `json:"utilization"`
 }
 
-// SharedPCMQPISocketCounter information
-type SharedPCMQPISocketCounter struct {
-	SocketID uint64
-	QPISock0 [7]uint64
-	Links    [QPIMaxLinks]SharedPCMQPILinkCounter
-	Total    uint64
-	QPISock1 [7]uint64
+// QPISocketCounter information
+type QPISocketCounter struct {
+	SocketID uint64           `json:"socketId"`
+	Links    []QPILinkCounter `json:"links"`
+	Total    uint64           `json:"total"`
 }
 
-// SharedPCMQPI information
-type SharedPCMQPI struct {
-	Incoming                           [MaxSockets]SharedPCMQPISocketCounter
-	Outgoing                           [MaxSockets]SharedPCMQPISocketCounter
-	IncomingTotal                      uint64
-	OutgoingTotal                      uint64
-	IncomingQPITrafficMetricsAvailable bool
-	OutgoingQPITrafficMetricsAvailable bool
-	QPIFiller0                         bool
-	QPIFiller1                         bool
-	QPIFiller2                         bool
-	QPIFiller3                         bool
-	QPIFiller4                         bool
-	QPIFiller5                         bool
-	QPICntr1                           [5]uint64
+// QPI information
+type QPI struct {
+	Incoming                           []QPISocketCounter `json:"incoming"`
+	Outgoing                           []QPISocketCounter `json:"outgoing"`
+	IncomingTotal                      uint64             `json:"incomingTotal"`
+	OutgoingTotal                      uint64             `json:"outgoingTotal"`
+	IncomingQPITrafficMetricsAvailable bool               `json:"incomingQPITrafficMetricsAvailable"`
+	OutgoingQPITrafficMetricsAvailable bool               `json:"outgoingQPITrafficMetricsAvailable"`
 }
 
 // PCIEvents information data
 type PCIEvents struct {
-	ReadCurrent           uint64
-	NonSnoopRead          uint64
-	WriteNonAlloc         uint64
-	WriteAlloc            uint64
-	NonSnoopWritePart     uint64	// Parial operation
-	NonSnoopWriteFull     uint64
+	ReadCurrent       uint64 `json:"PCIeRdCur"`
+	NonSnoopRead      uint64 `json:"PCIeNSRd"`
+	WriteNonAlloc     uint64 `json:"PCIeWiLF"`
+	WriteAlloc        uint64 `json:"PCIeItoM"`
+	NonSnoopWritePart uint64 `json:"PCIeNSWr"` // Parial operation
+	NonSnoopWriteFull uint64 `json:"PCIeNSWrF"`
 
-	ReadForOwnership      uint64
-	DemandCodeRd          uint64
-	DemandDataRd          uint64
-	PartialRead           uint64
-	WriteInvalidateLine   uint64	// Partial [MMIO write], PL: Not Documented in HSX/IVT
-	RequestInvalidateLine uint64	// PCIe write full cache line
-	ReadBandWidth         uint64
-	WriteBandWidth        uint64
-	PCIeEvent0            [2]uint64
+	ReadForOwnership      uint64 `json:"RFO"`
+	DemandCodeRd          uint64 `json:"CRd"`
+	DemandDataRd          uint64 `json:"DRd"`
+	PartialRead           uint64 `json:"PRd"`
+	WriteInvalidateLine   uint64 `json:"WiL"`  // Partial [MMIO write], PL: Not Documented in HSX/IVT
+	RequestInvalidateLine uint64 `json:"ItoM"` // PCIe write full cache line
+	ReadBandWidth         uint64 `json:"RdBw"`
+	WriteBandWidth        uint64 `json:"WrBw"`
 }
 
 // SampleData information
 type SampleData struct {
-	Total PCIEvents
-	Miss  PCIEvents
-	Hit   PCIEvents
+	Total PCIEvents `json:"total"`
+	Miss  PCIEvents `json:"miss"`
+	Hit   PCIEvents `json:"hit"`
 }
 
-// SharedPCMCounters data region
-type SharedPCMCounters struct {
-	System SharedPCMSystem
-	Core   SharedPCMCore
-	Memory SharedPCMMemory
-	QPI    SharedPCMQPI
+// PCIeSampleData information
+type PCIeSampleData struct {
+	Sockets   map[string]SampleData `json:"sockets"`
+	Aggregate PCIEvents             `json:"aggregate"`
 }
 
-// SharedHeader values in shared memory
-type SharedHeader struct {
+// Header values in shared memory
+type Header struct {
 	Version          string `rawlen:"16"`
-	TscBegin         uint64
-	TscEnd           uint64
-	CyclesToGetState uint64
-	TimeStamp        uint64
-	PollMs           uint32
-	DelayMs          uint32
-	Header0          uint64
-}
-
-// SharedPCMState data in shared memory
-type SharedPCMState struct {
-	Header      SharedHeader
-	PCMCounters SharedPCMCounters
-	Sample      [MaxSockets]SampleData
-	Aggregate   PCIEvents
+	TscBegin         uint64 `json:"tscBegin"`
+	TscEnd           uint64 `json:"tscEnd"`
+	CyclesToGetState uint64 `json:"cyclesToGetPCMState"`
+	TimeStamp        uint64 `json:"timestamp"`
+	SocketFd         int32  `json:"socketFd"`
+	PollMs           uint32 `json:"pollMs"`
 }
 
 // CPU Model IDs
@@ -272,17 +212,8 @@ var CPUModels = map[int]string{
 	SklUYMdel:            "SKL UY",
 	KBLModel:             "KBL",
 	KBL1Model:            "KBL 1",
-	BDXModel:             "BDX",
+	BDXModel:             "Broadwell",
 	KNLModel:             "KNL",
-	SKLModel:             "SKL",
+	SKLModel:             "Skylake",
 	SKXModel:             "SKX",
-}
-
-// CPUModel string name
-func CPUModel(id int) string {
-	v, ok := CPUModels[id]
-	if !ok {
-		return ""
-	}
-	return v
 }

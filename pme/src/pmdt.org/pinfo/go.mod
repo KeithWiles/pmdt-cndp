@@ -4,7 +4,7 @@ replace pmdt.org/pinfo => ./pinfo
 
 replace pmdt.org/ttylog => ../ttylog
 
-go 1.13
+go 1.14
 
 require (
 	github.com/dc0d/dirwatch v0.4.3

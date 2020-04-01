@@ -1,4 +1,4 @@
-Look at the pme/README-pme.txt and pcm/README-pcm.txt files for more limited support.
+Look at the pme/readme.txt file for more information.
 
 The PMDT tool is written in Go and a C++ daemon to collect system information. The tool
 is used to collect information about DPDK applications and display that data in a readable
@@ -13,16 +13,17 @@ strings on a local domain socket which is a filesystem based socket.
 
 PMDT (Performance Monitor Development Toolkit) is in two applications. One
 application (pme) is the golang code to display metric information. The second
-is (pcm) a daemon that runs in the background gathering system level metrics
+is (pcm-info) a daemon that runs in the background gathering system level metrics
 and placing that information in a shared memory region accessed by the PME tool.
 
-perfmon/pcm is the PCM daemon application running collecting the value into shared memory.
-perfmon/pme is the Performance monitor application written in Go.
+pmdt/pme/pcm-info:
+	A C++ daemon application running collecting PCM values. These values are
+	accessed via a local domain socket located at /var/run/pcm-info/
 
-Read the pcm/README.txt file for more information about build and running the pcm-daemon.
+pmdt/pme:
+	The Performance monitor application written in Go.
 
-Reporting issues and bugs should be sent to dev@dpdk.org with a subject tag of '[PMDT]'.
-Patches to the PMDT project should be sent to dev@dpdk.org with subject tag of '[PMDT PATCH]', unless a specific email address is created i.e. pmdt@dpdk.org.
+Patches to the PMDT project should be sent to pmdt@dpdk.org 
 All patches must follow the DPDK.org patch submission process.
 
 Thanks

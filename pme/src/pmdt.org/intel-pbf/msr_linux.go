@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"os"
 	"syscall"
-
-	tlog "pmdt.org/ttylog"
 )
 
 // A package to read the MSR values from the system
@@ -47,7 +45,6 @@ func (f MSRfd) ReadAt(msr int64) (uint64, error) {
 	// System call pread to read the MSR special register
 	n, err := syscall.Pread(f.fd, b, msr)
 	if err != nil {
-		tlog.ErrorPrintf("MSR syscall.Pread() failed\n")
 		return 0, err
 	}
 	// If length not value return error
@@ -83,7 +80,6 @@ func ReadMsr(cpu int, msr int64) (uint64, error) {
 
 	f, err := Open(cpu)
 	if err != nil {
-		tlog.ErrorPrintf("ReadMsr: MSR Open() failed\n")
 		return 0, err
 	}
 	defer f.Close()
@@ -91,7 +87,6 @@ func ReadMsr(cpu int, msr int64) (uint64, error) {
 	var val uint64
 
 	if val, err = f.ReadAt(msr); err != nil {
-		tlog.ErrorPrintf("MSR ReadAt() failed\n")
 		return 0, err
 	}
 	return val, nil
@@ -103,13 +98,11 @@ func WriteMsr(cpu int, msr int64, val uint64) error {
 
 	f, err := Open(cpu)
 	if err != nil {
-		tlog.ErrorPrintf("WriteMsr: MSR Open() failed\n")
 		return err
 	}
 	defer f.Close()
 
 	if err := f.WriteAt(msr, val); err != nil {
-		tlog.ErrorPrintf("MSR WriteAt() failed\n")
 		return err
 	}
 

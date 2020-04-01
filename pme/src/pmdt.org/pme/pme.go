@@ -5,23 +5,20 @@ package main
 
 import (
 	"fmt"
-	flags "github.com/jessevdk/go-flags"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 
+	flags "github.com/jessevdk/go-flags"
 	cz "pmdt.org/colorize"
 	tlog "pmdt.org/ttylog"
 
 	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 	"pmdt.org/etimers"
-	"pmdt.org/pcm"
 	"pmdt.org/pinfo"
-	"pmdt.org/profiles"
 )
 
 const (
@@ -42,15 +39,12 @@ type Panels func(nextPanel func()) (title string, content tview.Primitive)
 
 // PerfMonitor for monitoring DPDK and system performance data
 type PerfMonitor struct {
-	version      string             // Version of PMDT
-	app          *tview.Application // Application or top level application
-	timers       *etimers.EventTimers
-	pcmData      *pcm.Data
-	pcmInfo      *pcm.SharedPCMState
-	pcmValid     bool
-	pcmConnected bool
-	panels       []PanelInfo
-	processInfo  *pinfo.ProcessInfo
+	version string             // Version of PMDT
+	app     *tview.Application // Application or top level application
+	timers  *etimers.EventTimers
+	panels  []PanelInfo
+
+	pinfoPCM *pinfo.ProcessInfo
 }
 
 // Options command line options
@@ -95,18 +89,10 @@ func init() {
 	perfmon = PerfMonitor{}
 	perfmon.version = pmeVersion
 
-	// Parse the event profiles JSON file
-	if err := profiles.Parse(""); err != nil {
-		log.Fatalf("get config data failed: %s", err)
-	}
-
 	// Setup and locate the process info socket connections
-	perfmon.processInfo = pinfo.NewProcessInfo()
-	if perfmon.processInfo == nil {
-		panic("unable to setup processInfo")
-	}
-	if err := perfmon.processInfo.Open(); err != nil {
-		log.Fatalf("ProcessInfo.Open(): %v\n", err)
+	perfmon.pinfoPCM = pinfo.New("/var/run/pcm-info", "pinfo")
+	if perfmon.pinfoPCM == nil {
+		panic("unable to setup pinfoPCM")
 	}
 
 	// Create the main tveiw application.
@@ -119,9 +105,6 @@ func Version() string {
 }
 
 func main() {
-
-	// Close the process info package on exit
-	defer perfmon.processInfo.Close()
 
 	cz.SetDefault("ivory", "", 0, 2, "")
 
@@ -153,12 +136,13 @@ func main() {
 
 	panels := []Panels{
 		ProcessPanelSetup,
-		DPDKPanelSetup,
 		SysInfoPanelSetup,
-		PBFPanelSetup,
 		DevBindPanelSetup,
+		DPDKPanelSetup,
+		CorePanelSetup,
 		PCIPanelSetup,
 		QPIPanelSetup,
+		PBFPanelSetup,
 	}
 
 	// The bottom row has some info on where we are.
@@ -241,25 +225,10 @@ func main() {
 		time.Sleep(time.Second * time.Duration(options.WaitTime))
 	}
 
-	if err := perfmon.processInfo.Open(); err != nil {
+	if err := perfmon.pinfoPCM.StartWatching(); err != nil {
 		panic(err)
 	}
-	defer perfmon.processInfo.Close()
-
-	pcmData, err := pcm.Open("")
-	if err != nil {
-		fmt.Printf("Unable to connect to PCM shared memory: %v\n", err)
-	}
-	defer pcmData.Close()
-
-	perfmon.pcmData = pcmData
-	tlog.DoPrintf("perfmon.pcmData Opened: %v, Size: %d\n", perfmon.pcmData.Opened, perfmon.pcmData.Len())
-
-	perfmon.pcmData.Start()
-
-	if pcmData != nil && options.Verbose {
-		DumpSharedMemory()
-	}
+	defer perfmon.pinfoPCM.StopWatching()
 
 	// Start the application.
 	if err := app.SetRoot(panel, true).Run(); err != nil {
@@ -282,7 +251,6 @@ func setupSignals(signals ...os.Signal) {
 		time.Sleep(time.Second)
 
 		app.Stop()
-		perfmon.pcmData.Close()
 		os.Exit(1)
 	}()
 }
