@@ -132,7 +132,7 @@ func (pi *ProcessInfo) Open() error {
 		os.MkdirAll(pi.basePath, os.ModePerm)
 	}
 
-	tlog.DebugPrintf("Watch: %s\n", pi.basePath)
+	tlog.InfoPrintf("Watch: %s\n", pi.basePath)
 
 	watcher.Add(pi.basePath)
 
@@ -264,6 +264,7 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 
 		ap := &AppInfo{valid: true, Pid: pid, Path: path, conn: conn}
 
+		tlog.DoPrintf("Found %+v\n", ap)
 		// Add the AppInfo to the internal map structures
 		pi.appsByPath[path] = ap
 		pi.appsByPid[pid] = ap
@@ -417,6 +418,7 @@ func (pi *ProcessInfo) Unmarshal(command string, data interface{}) error {
 	if err != nil {
 		return err
 	}
+	tlog.DebugPrintf("Data: %v\n", string(d))
 
 	if err := json.Unmarshal(d, data); err != nil {
 		return err

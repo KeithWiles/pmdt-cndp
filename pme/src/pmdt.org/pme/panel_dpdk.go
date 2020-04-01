@@ -4,7 +4,7 @@
 package main
 
 import (
-//	"fmt"
+	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -12,8 +12,9 @@ import (
 
 	"pmdt.org/graphdata"
 	"pmdt.org/pinfo"
+	"pmdt.org/dpdk"
 
-//	cz "pmdt.org/colorize"
+	cz "pmdt.org/colorize"
 	tab "pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )
@@ -40,9 +41,9 @@ type DPDKPanel struct {
 	dpdkNet   *tview.Table
 	totalRX   *tview.TextView
 	totalTX   *tview.TextView
-	dpdkQueue *tview.Table
 
 	pinfoDPDK *pinfo.ProcessInfo
+	infoDPDK  dpdk.Information
 
 	data *rxtxData
 }
@@ -83,7 +84,7 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	flex0.AddItem(flex1, 0, 1, true)
 
-	table := CreateTableView(flex1, "Apps (a)", tview.AlignLeft, 18, 2, true)
+	table := CreateTableView(flex1, "Apps (1)", tview.AlignLeft, 18, 2, true)
 
 	clearScrollText := func(view *tview.TextView, f func(*tview.TextView), flg bool) {
 		if view == nil {
@@ -120,14 +121,18 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 		clearScrollText(pg.dpdkInfo, pg.displayDPDKInfo, true)
 		clearScrollTable(pg.dpdkNet, pg.displayDPDKNet, true)
-		clearScrollTable(pg.dpdkQueue, pg.displayDPDKQueue, true)
 	})
-
+	tlog.DoPrintf("Create DPDK ProcessInfo\n")
 	// Setup and locate the telemery socket connections
 	pg.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
 	if pg.pinfoDPDK == nil {
 		panic("unable to setup pinfoDPDK")
 	}
+
+	if err := pg.pinfoDPDK.Open(); err != nil {
+		panic(err)
+	}
+	defer pg.pinfoDPDK.Close()
 
 	pg.pinfoDPDK.Add("panel_dpdk", func(event int) {
 		names := make([]interface{}, 0)
@@ -154,19 +159,18 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	flex1.AddItem(flex2, 0, 1, true)
 
-	pg.dpdkInfo = CreateTextView(flex2, "DPDK Info (i)", tview.AlignLeft, 0, 2, true)
-	pg.dpdkNet = CreateTableView(flex2, "DPDK Network Stats (n)", tview.AlignLeft, 0, 4, false)
+	pg.dpdkInfo = CreateTextView(flex2, "DPDK Info (2)", tview.AlignLeft, 0, 2, true)
+	pg.dpdkNet = CreateTableView(flex2, "DPDK Network Stats (3)", tview.AlignLeft, 0, 4, false)
 	pg.dpdkNet.SetFixed(2, 0)
+	pg.dpdkNet.SetSeparator(tview.Borders.Vertical)
 	flex2.AddItem(flex3, 0, 3, false)
-	pg.dpdkQueue = CreateTableView(flex2, "DPDK Stats per Queue (s)", tview.AlignLeft, 0, 4, false)
 
 	pg.totalRX = CreateTextView(flex3, "Total RX Mbps", tview.AlignLeft, 0, 1, false)
 	pg.totalTX = CreateTextView(flex3, "Total TX Mbps", tview.AlignLeft, 0, 1, false)
 
-	to.Add(pg.selectApp.table, 'a')
-	to.Add(pg.dpdkInfo, 'i')
-	to.Add(pg.dpdkNet, 'n')
-	to.Add(pg.dpdkQueue, 's')
+	to.Add(pg.selectApp.table, '1')
+	to.Add(pg.dpdkInfo, '2')
+	to.Add(pg.dpdkNet, '3')
 
 	to.SetInputDone()
 
@@ -195,24 +199,55 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 		if a == nil {
 			return
 		}
-/*
-		// Find the list of devices currently handled by the DPDK application
-		eth, err := pi.EthdevList(a)
-		if err != nil {
-			tlog.ErrorPrintf("EthdevList failed: %v\n", err)
+
+		if err := pg.pinfoDPDK.Unmarshal("/eal/version", &pg.infoDPDK.Version); err != nil {
+			tlog.ErrorPrintf("Unable to get EAL version: %v\n", err)
 			return
 		}
+		tlog.DebugPrintf("EAL Version: %v\n", pg.infoDPDK.Version.Version)
+
+		if err := pg.pinfoDPDK.Unmarshal("/eal/params", &pg.infoDPDK.Params); err != nil {
+			tlog.ErrorPrintf("Unable to get EAL Parameters: %v\n", err)
+			return
+		}
+		tlog.DebugPrintf("EAL Parameters: %v\n", pg.infoDPDK.Params.Params)
+
+		if err := pg.pinfoDPDK.Unmarshal("/eal/app_params", &pg.infoDPDK.AppParams); err != nil {
+			tlog.ErrorPrintf("Unable to get EAL Application Parameters: %v\n", err)
+			return
+		}
+		tlog.DebugPrintf("EAL Application Parameters: %v\n", pg.infoDPDK.AppParams.Params)
+
+		if err := pg.pinfoDPDK.Unmarshal("/", &pg.infoDPDK.Cmds); err != nil {
+			tlog.ErrorPrintf("Unable to get EAL Commands: %v\n", err)
+			return
+		}
+		tlog.DebugPrintf("EAL Commands: %v\n", pg.infoDPDK.Cmds)
+
+		if err := pg.pinfoDPDK.Unmarshal("/ethdev/list", &pg.infoDPDK.PidList); err != nil {
+			tlog.ErrorPrintf("Unable to get Ethdev List information: %v\n", err)
+			return
+		}
+		tlog.DebugPrintf("EthdevList: %v\n", pg.infoDPDK.PidList)
 
 		// Output the basic data for the stats and information of a port
-		for _, eth := range eth.Ports {
+		for _, pid := range pg.infoDPDK.PidList.Pids {
 
-			_, err := pi.EthdevStats(a, eth.PortID)
-			if err != nil {
-				tlog.WarnPrintf("Calling EthdevStats failed: %v\n", err)
-				return
+			eth := dpdk.EthdevStats{}
+			cmd := fmt.Sprintf("/ethdev/stats,%d", pid)
+			if err := pg.pinfoDPDK.Unmarshal(cmd, &eth); err != nil {
+				tlog.WarnPrintf("Unable to get PCM system information\n")
+				continue
 			}
+			eth.Stats.PortID = pid
+			pg.infoDPDK.EthdevStats = append(pg.infoDPDK.EthdevStats, &eth)
+			tlog.DoPrintf("/ethdev/stats,%d: %+v\n", pid, eth)
+
+			// Update the previous stats
+			pg.infoDPDK.PrevStats[eth.Stats.PortID].Stats = eth.Stats
+
+			tlog.DebugPrintf("Prev: %+v\n", pg.infoDPDK.PrevStats[eth.Stats.PortID])
 		}
-*/
 	})
 
 	switch step {
@@ -220,7 +255,6 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 		// Display the screens each second
 		pg.displayDPDKInfo(pg.dpdkInfo)
 		pg.displayDPDKNet(pg.dpdkNet)
-		pg.displayDPDKQueue(pg.dpdkQueue)
 		pg.displayChart(pg.totalRX, true)
 		pg.displayChart(pg.totalTX, false)
 	}
@@ -234,29 +268,27 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 		return
 	}
 
-//	w := -14
+	w := -14
 
 	// Find the current selected application if any are available
 	a := pg.pinfoDPDK.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
 		return
 	}
-/*
-	info := pg.pinfoDPDK.Info(a)
 
+	info := pg.infoDPDK
 	// Set the speed/duplex and rate in the window
-	str := fmt.Sprintf("%s: %s, %s: %s\n",
-		cz.Orange("DPDK Verison", w), cz.LightGreen(info.Version),
-		cz.Orange("Pid"), cz.DeepPink(a.Pid))
+	str := fmt.Sprintf("%s: %s\n",
+		cz.Orange("DPDK Verison", w), cz.LightGreen(info.Version.Version))
 
 	// Dump out the DPDK and application args
-	str += fmt.Sprintf("%s: %s\n", cz.Orange("DPDK Options", w), cz.LightGreen(a.Params.EALArgs))
+	str += fmt.Sprintf("%s: %s\n", cz.Orange("DPDK Options", w), cz.LightGreen(info.Params.Params))
 
-	str += fmt.Sprintf("%s: %s\n", cz.Orange("Application", w), cz.LightGreen(a.Params.AppArgs))
+	str += fmt.Sprintf("%s: %s\n", cz.Orange("Application", w), cz.LightGreen(info.AppParams.Params))
 
 	// Set the text into the window
 	view.SetText(str)
-*/
+
 }
 
 // Display some Network information about the DPDK application
@@ -266,11 +298,29 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 		tlog.DoPrintf("displayDPDKNet: view is nil\n")
 		return
 	}
-/*
-	pi := pg.pinfoDPDK
-	a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
+	a := pg.pinfoDPDK.AppInfoByIndex(pg.selectApp.ItemIndex())
 	if a == nil {
 		return
+	}
+
+	if err := pg.pinfoDPDK.Unmarshal("/ethdev/list", &pg.infoDPDK.PidList); err != nil {
+		tlog.ErrorPrintf("Unable to get Ethdev List information: %v\n", err)
+		return
+	}
+	tlog.DebugPrintf("EthdevList: %v\n", pg.infoDPDK.PidList)
+
+	// Output the basic data for the stats and information of a port
+	for _, pid := range pg.infoDPDK.PidList.Pids {
+
+		eth := dpdk.EthdevStats{}
+		cmd := fmt.Sprintf("%s,%d", "/ethdev/stats", pid)
+		if err := pg.pinfoDPDK.Unmarshal(cmd, &eth); err != nil {
+			tlog.WarnPrintf("Unable to get PCM system information\n")
+			continue
+		}
+		eth.Stats.PortID = pid
+		pg.infoDPDK.EthdevStats = append(pg.infoDPDK.EthdevStats, &eth)
+		tlog.DoPrintf("%s,%d: %+v\n", "/ethdev/stats", pid, eth)
 	}
 
 	// Routine to help set the table cell
@@ -287,77 +337,61 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 	row := 0
 	col := 0
 
-	// Find the list of devices currently handled by the DPDK application
-	eth, err := pi.EthdevList(a)
-	if err != nil {
-		tlog.ErrorPrintf("EthdevList failed: %v\n", err)
-		return
-	}
 
-	// Setup and display the number of ports total and the number available
-	_, col = setCell(row, col, cz.LightSkyBlue("Ports Avail/Total"), true)
-	_, col = setCell(row, col, fmt.Sprintf("%s/%s",
-		cz.DeepPink(eth.Avail), cz.DeepPink(eth.Total)), true)
+	names := []string{"PortID", "ipackets", "opackets", "ibytes",
+		"obytes", "imissed", "ierrors", "oerrors", "rx_nombuf"}
 
-	row++
-	setCell(row, 0, cz.Lavender("Link:Port"), true)
-
-	names := []string{"ipackets", "opackets", "ibytes", "obytes", "imissed", "ierrors", "oerrors", "rx_nombuf"}
-
-	row++
-	for _, n := range names {
+	for i, n := range names {
 		// add the title names to the panel
-		setCell(row, 0, cz.Orange(n), true)
+		if i == 0 {
+			setCell(row, 0, cz.Wheat(n), true)
+			row++
+		} else {
+			setCell(row, 0, cz.Orange(n), true)
+		}
 		row++
 	}
 
 	var mbpsRx, mbpsTx float64
 
 	// Output the basic data for the stats and information of a port
-	for _, eth := range eth.Ports {
+	for _, eth := range pg.infoDPDK.EthdevStats {
 
-		col = eth.PortID + 1
-		row = 1
+		col = int(eth.Stats.PortID) + 1
+		row, _ = setCell(0, col, cz.Wheat(eth.Stats.PortID, 12), false)
+		row++
+		stats := &eth.Stats
 
-		// Output to the table the current rate values
-		str := fmt.Sprintf("%s-%s-%d:%d", eth.Duplex, eth.State, eth.Rate, eth.PortID)
-		row, _ = setCell(row, col, cz.Orange(str), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.InPackets), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.OutPackets), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.InBytes), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.OutBytes), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.InMissed), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.InErrors), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.OutErrors), false)
+		row, _ = setCell(row, col, cz.DeepPink(stats.RxNomBuf), false)
 
-		prevStats, err := pi.PreviousStats(a, eth.PortID)
-		if err != nil {
-			tlog.WarnPrintf("Calling PreviousStats failed: %v\n", err)
-			return
-		}
+		prevStats := &pg.infoDPDK.PrevStats[eth.Stats.PortID].Stats
 
-		stats, err := pi.EthdevStats(a, eth.PortID)
-		if err != nil {
-			tlog.WarnPrintf("Calling EthdevStats failed: %v\n", err)
-			return
-		}
+		bytesIn := stats.InBytes - prevStats.InBytes
+		bytesOut := stats.OutBytes - prevStats.OutBytes
 
-		row, _ = setCell(row, col, cz.DeepPink(stats.PacketsIn), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.PacketsOut), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.BytesIn), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.BytesOut), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.MissedIn), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.ErrorsIn), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.ErrorsOut), false)
-		row, _ = setCell(row, col, cz.DeepPink(stats.RxNoMbuf), false)
+		pktsIn := stats.InPackets - prevStats.InPackets
+		pktsOut := stats.OutPackets - prevStats.OutPackets
 
-
-		bytesIn := stats.BytesIn - prevStats.BytesIn
-		bytesOut := stats.BytesOut - prevStats.BytesOut
-
-		pktsIn := stats.PacketsIn - prevStats.PacketsIn
-		pktsOut := stats.PacketsOut - prevStats.PacketsOut
+		pg.infoDPDK.PrevStats[eth.Stats.PortID] = *eth
 
 		mbpsRx += BitRate(pktsIn, bytesIn)
 		mbpsTx += BitRate(pktsOut, bytesOut)
+
+		// Update the previous stats
+		pg.infoDPDK.PrevStats[eth.Stats.PortID].Stats = eth.Stats
+
+		tlog.DoPrintf("Prev: %+v\n\n", pg.infoDPDK.PrevStats[eth.Stats.PortID])
 	}
 
 	pg.data.rxPoints.GraphPoints(0).AddPoint(mbpsRx/(1024.0 * 1024.0))
 	pg.data.txPoints.GraphPoints(0).AddPoint(mbpsTx/(1024.0 * 1024.0))
-*/
 }
 
 
