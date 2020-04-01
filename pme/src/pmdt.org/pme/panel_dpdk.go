@@ -35,13 +35,13 @@ type DPDKPanel struct {
 	tabOrder *tab.Tab
 	topFlex  *tview.Flex
 
-	once		sync.Once
+	once      sync.Once
 	selectApp *SelectWindow
 
-	dpdkInfo  *tview.TextView
-	dpdkNet   *tview.Table
-	totalRX   *tview.TextView
-	totalTX   *tview.TextView
+	dpdkInfo *tview.TextView
+	dpdkNet  *tview.Table
+	totalRX  *tview.TextView
+	totalTX  *tview.TextView
 
 	pinfoDPDK *pinfo.ProcessInfo
 	infoDPDK  dpdk.Information
@@ -335,7 +335,6 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 	row := 0
 	col := 0
 
-
 	names := []string{"PortID", "ipackets", "opackets", "ibytes",
 		"obytes", "imissed", "ierrors", "oerrors", "rx_nombuf"}
 
@@ -392,8 +391,8 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 	}
 	tlog.DebugPrintf("\n")
 
-	pg.data.rxPoints.GraphPoints(0).AddPoint(mbpsRx/(1024.0 * 1024.0))
-	pg.data.txPoints.GraphPoints(0).AddPoint(mbpsTx/(1024.0 * 1024.0))
+	pg.data.rxPoints.GraphPoints(0).AddPoint(mbpsRx / (1024.0 * 1024.0))
+	pg.data.txPoints.GraphPoints(0).AddPoint(mbpsTx / (1024.0 * 1024.0))
 }
 
 // Display to update the graphs on the panel

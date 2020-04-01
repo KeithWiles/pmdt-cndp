@@ -177,13 +177,13 @@ func (pg *PagePCI) displayPCIPage(step int, ticks uint64) {
 
 // Collect the data from for charts
 func (pg *PagePCI) collectChartData() {
-/*
-	for i, gd := range pg.charts.Graphs() {
-		p := pg.pcmState
+	/*
+		for i, gd := range pg.charts.Graphs() {
+			p := pg.pcmState
 
-		gd.AddPoint(float64(p.Sample[i].Total.ReadForOwnership))
-		gd.SetName(fmt.Sprintf("ReadForOwnership %d", i))
-	}
+			gd.AddPoint(float64(p.Sample[i].Total.ReadForOwnership))
+			gd.SetName(fmt.Sprintf("ReadForOwnership %d", i))
+		}
 	*/
 }
 

@@ -15,10 +15,10 @@ import (
 
 // ConnInfo - Information about the app
 type ConnInfo struct {
-	valid  bool		// true if the process info data is valid
-	conn   *net.UnixConn
-	Pid    int64    // Pid for the process
-	Path   string   // Path of the process_pinfo.<pid> file
+	valid bool // true if the process info data is valid
+	conn  *net.UnixConn
+	Pid   int64  // Pid for the process
+	Path  string // Path of the process_pinfo.<pid> file
 }
 
 // ConnInfoMap holds all of the process info data
@@ -32,7 +32,7 @@ type ProcessInfo struct {
 	lock     sync.Mutex
 	opened   bool              // true if process info open
 	basePath string            // Base path to the run directory
-	baseName string			   // Base file name
+	baseName string            // Base file name
 	connInfo ConnInfoMap       // Indexed by pid for each application
 	callback CallbackMap       // Callback routines for the fsnotify
 	watcher  *fsnotify.Watcher // watcher for the directory notify
@@ -46,7 +46,7 @@ const (
 // New information structure
 func New(bpath, bname string) *ProcessInfo {
 
-	pi := &ProcessInfo{ basePath: bpath, baseName: bname }
+	pi := &ProcessInfo{basePath: bpath, baseName: bname}
 
 	pi.connInfo = make(ConnInfoMap)
 	pi.callback = make(CallbackMap)

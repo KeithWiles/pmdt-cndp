@@ -254,16 +254,16 @@ func (pg *PageSysInfo) displayMem(view *tview.TextView) {
 	str += fmt.Sprintf("         Free: %s MiB\n", cz.Green(v.Free/MegaBytes, 6))
 	str += fmt.Sprintf("         Used: %s Percent\n\n", cz.Orange(v.UsedPercent, 6, 1))
 
-//	for i := 0; i < int(pg.numSockets); i++ {
-//		v, _ := mem.VirtualMemoryPerSocket(i)
-//		str += fmt.Sprintf("%s:\n", cz.MediumSpringGreen(fmt.Sprintf("NUMA Node %d Hugepage Info", i)))
-//		str += fmt.Sprintf("   Free/Total: %s/%s pages\n", cz.LightBlue(v.HugePagesFree, 6), cz.LightBlue(v.HugePagesTotal, 6))
-//		str += fmt.Sprintf("      Surplus: %s pages\n\n", cz.LightBlue(v.HugePagesSurp, 6))
-//	}
+	//	for i := 0; i < int(pg.numSockets); i++ {
+	//		v, _ := mem.VirtualMemoryPerSocket(i)
+	//		str += fmt.Sprintf("%s:\n", cz.MediumSpringGreen(fmt.Sprintf("NUMA Node %d Hugepage Info", i)))
+	//		str += fmt.Sprintf("   Free/Total: %s/%s pages\n", cz.LightBlue(v.HugePagesFree, 6), cz.LightBlue(v.HugePagesTotal, 6))
+	//		str += fmt.Sprintf("      Surplus: %s pages\n\n", cz.LightBlue(v.HugePagesSurp, 6))
+	//	}
 
 	str += fmt.Sprintf("%s:\n", cz.MediumSpringGreen("Total Hugepage Info"))
 	str += fmt.Sprintf("   Free/Total: %s/%s pages\n", cz.LightBlue(v.HugePagesFree, 6), cz.LightBlue(v.HugePagesTotal, 6))
-//	str += fmt.Sprintf(" Rsvd/Surplus: %s/%s pages\n", cz.LightBlue(v.HugePagesRsvd, 6), cz.LightBlue(v.HugePagesSurp, 6))
+	//	str += fmt.Sprintf(" Rsvd/Surplus: %s/%s pages\n", cz.LightBlue(v.HugePagesRsvd, 6), cz.LightBlue(v.HugePagesSurp, 6))
 	str += fmt.Sprintf("Hugepage Size: %s Kb\n", cz.LightBlue(v.HugePageSize/KiloBytes, 6))
 
 	view.SetText(str)

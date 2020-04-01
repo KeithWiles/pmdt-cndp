@@ -39,12 +39,12 @@ type Panels func(nextPanel func()) (title string, content tview.Primitive)
 
 // PerfMonitor for monitoring DPDK and system performance data
 type PerfMonitor struct {
-	version      string             // Version of PMDT
-	app          *tview.Application // Application or top level application
-	timers       *etimers.EventTimers
-	panels       []PanelInfo
+	version string             // Version of PMDT
+	app     *tview.Application // Application or top level application
+	timers  *etimers.EventTimers
+	panels  []PanelInfo
 
-	pinfoPCM     *pinfo.ProcessInfo
+	pinfoPCM *pinfo.ProcessInfo
 }
 
 // Options command line options

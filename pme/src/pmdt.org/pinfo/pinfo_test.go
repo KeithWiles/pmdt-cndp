@@ -25,7 +25,7 @@ func TestInfo(t *testing.T) {
 	for _, a := range pi.AppsList() {
 		cmds, err := pi.Commands(a)
 		if err != nil {
-			t.Logf("Info for %s\n", a.Path);
+			t.Logf("Info for %s\n", a.Path)
 			continue
 		}
 

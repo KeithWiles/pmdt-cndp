@@ -26,11 +26,11 @@ type PageQPI struct {
 	qpiTotals  *tview.Table
 	qpiCharts  [2]*tview.TextView
 
-	system     pcm.System
-	header     pcm.Header
-	valid      bool
+	system pcm.System
+	header pcm.Header
+	valid  bool
 
-	charts *graphdata.GraphInfo
+	charts                *graphdata.GraphInfo
 	qpiRedraw, coreRedraw bool
 }
 
@@ -140,18 +140,18 @@ func (pg *PageQPI) staticQPIData() {
 
 func (pg *PageQPI) collectData() {
 	/*
-	qpi := pg.pcmState.PCMCounters.QPI
+		qpi := pg.pcmState.PCMCounters.QPI
 
-	if qpi.IncomingQPITrafficMetricsAvailable {
-		gd := pg.charts.WithIndex(0)
-		gd.AddPoint(float64(qpi.IncomingTotal))
-		gd.SetName("Socket IN Total")
-	}
-	if qpi.OutgoingQPITrafficMetricsAvailable {
-		gd := pg.charts.WithIndex(1)
-		gd.AddPoint(float64(qpi.OutgoingTotal))
-		gd.SetName("Socket OUT Total")
-	}
+		if qpi.IncomingQPITrafficMetricsAvailable {
+			gd := pg.charts.WithIndex(0)
+			gd.AddPoint(float64(qpi.IncomingTotal))
+			gd.SetName("Socket IN Total")
+		}
+		if qpi.OutgoingQPITrafficMetricsAvailable {
+			gd := pg.charts.WithIndex(1)
+			gd.AddPoint(float64(qpi.OutgoingTotal))
+			gd.SetName("Socket OUT Total")
+		}
 	*/
 }
 
@@ -202,7 +202,7 @@ func (pg *PageQPI) displayQPITotals(view *tview.Table) {
 		return
 	}
 
-	for i, s := range []string{ "Incoming QPI", "LinkID", "Bytes", "Utilization", "Total" } {
+	for i, s := range []string{"Incoming QPI", "LinkID", "Bytes", "Utilization", "Total"} {
 		SetCell(view, 0, i, cz.Orange(s), tview.AlignRight)
 	}
 

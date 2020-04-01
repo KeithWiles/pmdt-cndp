@@ -5,14 +5,14 @@ package pinfo
 
 import (
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"strings"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
+	"log"
 	"net"
+	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	tlog "pmdt.org/ttylog"
 )
@@ -53,8 +53,8 @@ func exists(path string) (bool, error) {
 
 func (pi *ProcessInfo) callbackFunctions() {
 
-		// Callback the user level functions on the first time
-		for _, c := range pi.callback {
+	// Callback the user level functions on the first time
+	for _, c := range pi.callback {
 		c.cb(AppInited)
 	}
 }
@@ -80,7 +80,7 @@ func (pi *ProcessInfo) StartWatching() error {
 		return fmt.Errorf("%s: %v", pi.basePath, err)
 	}
 
-	pi.scan()		// Scan the directory for the first time
+	pi.scan() // Scan the directory for the first time
 
 	// Spin up a thread for watching the directory
 	go func() {
@@ -109,7 +109,7 @@ func (pi *ProcessInfo) StartWatching() error {
 						}
 					}
 
-					pi.scan()	// Scan when a create event has happened
+					pi.scan() // Scan when a create event has happened
 
 					pi.callbackFunctions()
 
@@ -218,7 +218,7 @@ func (pi *ProcessInfo) scan() {
 		if entry.IsDir() {
 			appFiles, err := ioutil.ReadDir(pi.basePath + "/" + entry.Name())
 			if err != nil {
-				log.Fatalf("Unable to open %s\n", pi.basePath + "/" + entry.Name())
+				log.Fatalf("Unable to open %s\n", pi.basePath+"/"+entry.Name())
 			}
 
 			for _, file := range appFiles {

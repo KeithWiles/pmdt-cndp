@@ -24,13 +24,13 @@ type PageCore struct {
 	title      *tview.Box
 	CoreSystem *tview.Table
 	Core       *tview.Table
-	CoreCharts  [2]*tview.TextView
+	CoreCharts [2]*tview.TextView
 
-	system     pcm.System
-	header     pcm.Header
-	valid      bool
+	system pcm.System
+	header pcm.Header
+	valid  bool
 
-	charts *graphdata.GraphInfo
+	charts                 *graphdata.GraphInfo
 	CoreRedraw, coreRedraw bool
 }
 
@@ -138,20 +138,20 @@ func (pg *PageCore) staticCoreData() {
 }
 
 func (pg *PageCore) collectData() {
-/*
-	core := pg.pcmState.PCMCounters.Core
+	/*
+		core := pg.pcmState.PCMCounters.Core
 
-	if Core.IncomingCoreTrafficMetricsAvailable {
-		gd := pg.charts.WithIndex(0)
-		gd.AddPoint(float64(Core.IncomingTotal))
-		gd.SetName("Socket IN Total")
-	}
-	if Core.OutgoingCoreTrafficMetricsAvailable {
-		gd := pg.charts.WithIndex(1)
-		gd.AddPoint(float64(Core.OutgoingTotal))
-		gd.SetName("Socket OUT Total")
-	}
-*/
+		if Core.IncomingCoreTrafficMetricsAvailable {
+			gd := pg.charts.WithIndex(0)
+			gd.AddPoint(float64(Core.IncomingTotal))
+			gd.SetName("Socket IN Total")
+		}
+		if Core.OutgoingCoreTrafficMetricsAvailable {
+			gd := pg.charts.WithIndex(1)
+			gd.AddPoint(float64(Core.OutgoingTotal))
+			gd.SetName("Socket OUT Total")
+		}
+	*/
 }
 
 func (pg *PageCore) displayCoreSystem(view *tview.Table) {
