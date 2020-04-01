@@ -10,25 +10,13 @@ replace pmdt.org/dpdk => ../dpdk
 
 replace pmdt.org/ttylog => ../ttylog
 
-replace pmdt.org/perfdata => ../perfdata
-
 replace pmdt.org/jevents => ../jevents
-
-replace pmdt.org/perf => ../perf
 
 replace pmdt.org/taborder => ../taborder
 
 replace pmdt.org/intelpbf => ../intel-pbf
 
 replace pmdt.org/etimers => ../etimers
-
-replace pmdt.org/profiles => ../profiles
-
-replace pmdt.org/encoding/raw => ../encoding/raw
-
-replace pmdt.org/hexdump => ../hexdump
-
-replace pmdt.org/semaphore => ../semaphore
 
 replace pmdt.org/graphdata => ../graphdata
 
@@ -54,7 +42,6 @@ require (
 	pmdt.org/intelpbf v0.0.0-00010101000000-000000000000
 	pmdt.org/pcm v0.0.0-00010101000000-000000000000
 	pmdt.org/pinfo v0.0.0-00010101000000-000000000000
-	pmdt.org/profiles v0.0.0-00010101000000-000000000000
 	pmdt.org/taborder v0.0.0-00010101000000-000000000000
 	pmdt.org/ttylog v0.0.0-00010101000000-000000000000
 )

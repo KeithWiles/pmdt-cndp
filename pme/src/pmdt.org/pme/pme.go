@@ -5,14 +5,13 @@ package main
 
 import (
 	"fmt"
-	flags "github.com/jessevdk/go-flags"
-	"log"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 	"time"
 
+	flags "github.com/jessevdk/go-flags"
 	cz "pmdt.org/colorize"
 	tlog "pmdt.org/ttylog"
 
@@ -20,7 +19,6 @@ import (
 	"github.com/rivo/tview"
 	"pmdt.org/etimers"
 	"pmdt.org/pinfo"
-	"pmdt.org/profiles"
 )
 
 const (
@@ -90,11 +88,6 @@ func init() {
 
 	perfmon = PerfMonitor{}
 	perfmon.version = pmeVersion
-
-	// Parse the event profiles JSON file
-	if err := profiles.Parse(""); err != nil {
-		log.Fatalf("get config data failed: %s", err)
-	}
 
 	// Setup and locate the process info socket connections
 	perfmon.pinfoPCM = pinfo.New("/var/run/pcm-info", "pinfo")
