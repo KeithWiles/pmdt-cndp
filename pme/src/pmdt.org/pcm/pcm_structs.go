@@ -3,16 +3,6 @@
 
 package pcm
 
-import ()
-
-// PCM system constants
-const (
-	MaxCPUCores          int    = 256
-	MaxSockets           int    = 8
-	QPIMaxLinks          int    = 32 // (MaxSockets * 4)
-	MemoryMaxIMCChannels int    = 8
-)
-
 // System information
 type System struct {
 	NumOfCores             uint64	`json:"numOfCores"`
@@ -226,13 +216,4 @@ var CPUModels = map[int]string{
 	KNLModel:             "KNL",
 	SKLModel:             "Skylake",
 	SKXModel:             "SKX",
-}
-
-// CPUModel string name
-func CPUModel(id int) string {
-	v, ok := CPUModels[id]
-	if !ok {
-		return ""
-	}
-	return v
 }

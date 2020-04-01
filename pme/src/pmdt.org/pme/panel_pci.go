@@ -5,17 +5,15 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"sync"
 
 	"github.com/rivo/tview"
-	cz "pmdt.org/colorize"
 	"pmdt.org/graphdata"
 	"pmdt.org/pcm"
 
-	//	"pmdt.org/pcm"
+	cz "pmdt.org/colorize"
 	tab "pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )
@@ -36,7 +34,6 @@ type PagePCI struct {
 	note       *tview.TextView
 	pciCharts  [2]*tview.TextView
 	pciScanner *bufio.Scanner
-//	pcmState   *pcm.SharedPCMState
 	charts     *graphdata.GraphInfo
 	pciRedraw  bool
 	once       sync.Once
@@ -193,25 +190,15 @@ func (pg *PagePCI) collectChartData() {
 // Display the PCI information into the window or table view object
 func (pg *PagePCI) displayPCI(view *tview.Table) {
 
-	row := 0
+	ps := pcm.PCIeSampleData{}
 
-	p := perfmon.pinfoPCM.ConnectionList()
-	if len(p) == 0 {
-		return
-	}
-
-	d, err := perfmon.pinfoPCM.IssueCommand(p[0], "/pcm/pcie")
+	err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/pcie", &ps)
 	if err != nil {
 		tlog.ErrorPrintf("Error on command: %s\n", err)
 		return
 	}
 
-	ps := pcm.PCIeSampleData{}
-
-	if err := json.Unmarshal(d, &ps); err != nil {
-		tlog.ErrorPrintf("unmarshal failed: %v\n", err)
-		return
-	}
+	row := 0
 
 	// Set the column headers for the PCIe data
 	for i, s := range []string{"Socket", "ReadCurr",

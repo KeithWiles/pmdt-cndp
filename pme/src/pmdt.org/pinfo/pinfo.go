@@ -116,32 +116,6 @@ func (pi *ProcessInfo) ConnectionByPid(pid int64) *ConnInfo {
 	return nil
 }
 
-/*
-// Commands returns the list of commands
-func (pi *ProcessInfo) Commands(a *ConnInfo) ([]string, error) {
-
-	d, err := pi.doCmd(a, "/")
-	if err != nil {
-		return nil, err
-	}
-
-	data := struct {
-		Cmds []string
-	}{}
-
-	if err := json.Unmarshal(d, &data); err != nil {
-		return nil, err
-	}
-
-	return data.Cmds, nil
-}
-*/
-// IssueCommand to the process socket
-func (pi *ProcessInfo) IssueCommand(a *ConnInfo, str string) ([]byte, error) {
-
-	return pi.doCmd(a, str)
-}
-
 // Unmarshal the JSON data into a structure
 func (pi *ProcessInfo) Unmarshal(p *ConnInfo, command string, data interface{}) error {
 
@@ -155,7 +129,7 @@ func (pi *ProcessInfo) Unmarshal(p *ConnInfo, command string, data interface{}) 
 			break
 		}
 	}
-	d, err := pi.IssueCommand(p, command)
+	d, err := pi.doCmd(p, command)
 	if err != nil {
 		return err
 	}

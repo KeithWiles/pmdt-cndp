@@ -24,8 +24,6 @@ replace pmdt.org/etimers => ../etimers
 
 replace pmdt.org/profiles => ../profiles
 
-replace pmdt.org/pcm => ../pcm
-
 replace pmdt.org/encoding/raw => ../encoding/raw
 
 replace pmdt.org/hexdump => ../hexdump
@@ -35,6 +33,8 @@ replace pmdt.org/semaphore => ../semaphore
 replace pmdt.org/graphdata => ../graphdata
 
 replace pmdt.org/pinfo => ../pinfo
+
+replace pmdt.org/pcm => ../pcm
 
 go 1.14
 

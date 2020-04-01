@@ -3,17 +3,11 @@
 
 package pcm
 
-import (
-//	"encoding/binary"
-//	"strings"
-)
-
-// Info is the data structure for PCM information
-type Info struct {
-	dummy int
-}
-
-// Create a PCM data structure
-func Create() (*Info) {
-	return &Info{}
+// CPUModel string name
+func CPUModel(id int) string {
+	v, ok := CPUModels[id]
+	if !ok {
+		return ""
+	}
+	return v
 }
