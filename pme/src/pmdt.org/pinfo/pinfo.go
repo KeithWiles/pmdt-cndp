@@ -6,39 +6,23 @@ package pinfo
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"strings"
-	//	"time"
 	"github.com/fsnotify/fsnotify"
-	"io/ioutil"
 	"net"
-	"path/filepath"
 	"sync"
 
 	tlog "pmdt.org/ttylog"
 )
 
-// AppInfo - Information about the app
-type AppInfo struct {
+// ConnInfo - Information about the app
+type ConnInfo struct {
 	valid  bool		// true if the process info data is valid
 	conn   *net.UnixConn
 	Pid    int64    // Pid for the process
 	Path   string   // Path of the process_pinfo.<pid> file
 }
 
-// Callback structure and data
-type Callback struct {
-	name string          // string name of the callback used as key
-	cb   func(event int) // function to callback the application for notifies
-}
-
-// AppMapByPath holds all of the process info data
-type AppMapByPath map[string]*AppInfo
-
-// AppMapByPid holds all of the process info data
-type AppMapByPid map[int64]*AppInfo
+// ConnInfoMap holds all of the process info data
+type ConnInfoMap map[int64]*ConnInfo
 
 // CallbackMap holds the watcher fsnotify callback information
 type CallbackMap map[string]*Callback
@@ -49,28 +33,22 @@ type ProcessInfo struct {
 	opened   bool              // true if process info open
 	basePath string            // Base path to the run directory
 	baseName string			   // Base file name
-	appsByPath AppMapByPath    // Indexed by path for each application
-	appsByPid AppMapByPid
+	connInfo ConnInfoMap       // Indexed by pid for each application
 	callback CallbackMap       // Callback routines for the fsnotify
 	watcher  *fsnotify.Watcher // watcher for the directory notify
 }
 
-// Define the events the application callback will use
+// Define the buffer size to be used for incoming data
 const (
-	AppInited  = iota
-	AppCreated = iota
-	AppRemoved = iota
-
 	maxBufferSize = (16 * 1024)
 )
 
-// NewProcessInfo information structure
-func NewProcessInfo(bpath, bname string) *ProcessInfo {
+// New information structure
+func New(bpath, bname string) *ProcessInfo {
 
 	pi := &ProcessInfo{ basePath: bpath, baseName: bname }
 
-	pi.appsByPath = make(AppMapByPath)
-	pi.appsByPid = make(AppMapByPid)
+	pi.connInfo = make(ConnInfoMap)
 	pi.callback = make(CallbackMap)
 
 	pi.opened = false
@@ -79,7 +57,7 @@ func NewProcessInfo(bpath, bname string) *ProcessInfo {
 }
 
 // doCmd information
-func (pi *ProcessInfo) doCmd(a *AppInfo, cmd string) ([]byte, error) {
+func (pi *ProcessInfo) doCmd(a *ConnInfo, cmd string) ([]byte, error) {
 
 	if _, err := a.conn.Write([]byte(cmd)); err != nil {
 		return nil, fmt.Errorf("write on socket failed: %v", err)
@@ -94,243 +72,12 @@ func (pi *ProcessInfo) doCmd(a *AppInfo, cmd string) ([]byte, error) {
 	return buf[:n], nil
 }
 
-func (pi *ProcessInfo) watchDir(path string, fi os.FileInfo, err error) error {
+// ConnectionList returns the list of ConnInfo structures
+func (pi *ProcessInfo) ConnectionList() []*ConnInfo {
 
-	if fi == nil {
-		return nil
-	}
-	if fi.Mode().IsDir() {
-		tlog.DebugPrintf("watchDir: %s\n", path)
-		return pi.watcher.Add(path)
-	}
-	return nil
-}
+	p := make([]*ConnInfo, 0)
 
-// exists returns whether the given file or directory exists
-func exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return true, err
-}
-
-// Open the directory and read the first set of directories
-func (pi *ProcessInfo) Open() error {
-
-	// Create the watcher to watch all sub-directories
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-	pi.watcher = watcher
-
-	if ok, _ := exists(pi.basePath); !ok {
-		os.MkdirAll(pi.basePath, os.ModePerm)
-	}
-
-	tlog.InfoPrintf("Watch: %s\n", pi.basePath)
-
-	watcher.Add(pi.basePath)
-
-	if err := filepath.Walk(pi.basePath, pi.watchDir); err != nil {
-		return fmt.Errorf("%s: %v", pi.basePath, err)
-	}
-
-	pi.scan()
-
-	go func() {
-		// Callback the user level functions for changes the first time
-		for _, c := range pi.callback {
-			c.cb(AppInited)
-		}
-
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					continue
-				}
-				//				time.Sleep(time.Second / 2)
-				switch {
-				case (event.Op & fsnotify.Create) == fsnotify.Create:
-
-					//tlog.DoPrintf("Event: %s\n", event.String())
-
-					if fi, err := os.Stat(event.Name); err == nil {
-						if fi.Mode().IsDir() {
-							tlog.DoPrintf("Add Watcher for %s\n", event.Name)
-							watcher.Add(event.Name)
-						}
-					}
-
-					pi.scan()
-
-					for _, c := range pi.callback {
-						c.cb(AppCreated)
-					}
-				case (event.Op & fsnotify.Remove) == fsnotify.Remove:
-					tlog.DebugPrintf("Event: %s\n", event.String())
-
-					tlog.DebugPrintf("Remove Watcher for %s\n", event.Name)
-					watcher.Remove(event.Name)
-
-					pi.scan()
-
-					for _, c := range pi.callback {
-						c.cb(AppRemoved)
-					}
-				}
-
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					continue
-				}
-				tlog.ErrorPrintf("fsnotify: error %v", err)
-			}
-		}
-	}()
-
-	pi.opened = true
-
-	return nil
-}
-
-// Close the connection
-func (pi *ProcessInfo) Close() {
-
-	if !pi.opened {
-		return
-	}
-
-	pi.watcher.Close()
-
-	pi.watcher = nil
-	pi.opened = false
-}
-
-// Add callback function when directory changes
-func (pi *ProcessInfo) Add(name string, f func(event int)) {
-	pi.callback[name] = &Callback{name: name, cb: f}
-
-	f(AppInited) // Call it the first time it is setup
-}
-
-// Remove callback function
-func (pi *ProcessInfo) Remove(name string) {
-	_, ok := pi.callback[name]
-	if ok {
-		delete(pi.callback, name)
-	}
-}
-
-// SetPath to the currect base path for apps
-func (pi *ProcessInfo) SetPath(path string) {
-	pi.basePath = path
-}
-
-func (pi *ProcessInfo) addFile(name, dir string) {
-
-	if strings.HasPrefix(filepath.Base(name), pi.baseName) {
-		ext := filepath.Ext(name)
-
-		pid, err := strconv.ParseInt(ext[1:], 10, 64)
-		if err != nil {
-			tlog.WarnPrintf("uable to parse pid from filename %s\n", name)
-			return
-		}
-
-		var path string
-		if dir == "" {
-			path = pi.basePath + "/" + name
-		} else {
-			path = pi.basePath + "/" + dir + "/" + name
-		}
-		if a, ok := pi.appsByPath[path]; ok {
-			a.valid = true
-			return
-		}
-
-		// Open the connection to the application
-		t := "unixpacket"
-		laddr := net.UnixAddr{Name: path, Net: t}
-		conn, err := net.DialUnix(t, nil, &laddr)
-		if err != nil {
-			log.Fatalf("connection to socket failed: %v", err)
-		}
-
-		ap := &AppInfo{valid: true, Pid: pid, Path: path, conn: conn}
-
-		tlog.DoPrintf("Found %+v\n", ap)
-		// Add the AppInfo to the internal map structures
-		pi.appsByPath[path] = ap
-		pi.appsByPid[pid] = ap
-	}
-}
-
-// Scan for the process info socket files
-func (pi *ProcessInfo) scan() {
-
-	dirs, err := ioutil.ReadDir(pi.basePath)
-	if err != nil {
-		log.Fatalf("ReadDir failed: %v\n", err)
-	}
-
-	pi.lock.Lock()
-	defer pi.lock.Unlock()
-
-	// Set all of the current files to false, to allow for removal later
-	// When we find the same one in the scan we mark it as true, then
-	// remove the ones that are not valid anymore
-	for _, a := range pi.appsByPath {
-		a.valid = false
-	}
-
-	for _, entry := range dirs {
-
-		if entry.IsDir() {
-			appFiles, err := ioutil.ReadDir(pi.basePath + "/" + entry.Name())
-			if err != nil {
-				log.Fatalf("Unable to open %s\n", pi.basePath + "/" + entry.Name())
-			}
-
-			for _, file := range appFiles {
-				if strings.HasPrefix(filepath.Base(file.Name()), pi.baseName) {
-					pi.addFile(file.Name(), entry.Name())
-				}
-			}
-		} else {
-			pi.addFile(entry.Name(), "")
-		}
-	}
-
-	// release AppInfo data for old process info files/pids
-	for k, a := range pi.appsByPath {
-		if !a.valid {
-			a.conn.Close()
-			delete(pi.appsByPid, a.Pid)
-			delete(pi.appsByPath, k)
-		}
-	}
-}
-
-// Scan the directory for new or removed process info files
-func (pi *ProcessInfo) Scan() {
-
-	if pi != nil {
-		pi.scan()
-	}
-}
-
-// AppsList returns the list of AppInfo structures
-func (pi *ProcessInfo) AppsList() []*AppInfo {
-
-	p := make([]*AppInfo, 0)
-
-	for _, a := range pi.appsByPath {
+	for _, a := range pi.connInfo {
 		p = append(p, a)
 	}
 	return p
@@ -340,7 +87,7 @@ func (pi *ProcessInfo) AppsList() []*AppInfo {
 func (pi *ProcessInfo) Files() []string {
 
 	files := []string{}
-	for _, a := range pi.appsByPath {
+	for _, a := range pi.connInfo {
 		files = append(files, a.Path)
 	}
 
@@ -351,17 +98,17 @@ func (pi *ProcessInfo) Files() []string {
 func (pi *ProcessInfo) Pids() []int64 {
 
 	pids := make([]int64, 0)
-	for _, a := range pi.appsByPid {
+	for _, a := range pi.connInfo {
 		pids = append(pids, a.Pid)
 	}
 
 	return pids
 }
 
-// AppInfoByPid returns the AppInfo pointer using the Pid
-func (pi *ProcessInfo) AppInfoByPid(pid int64) *AppInfo {
+// ConnectionByPid returns the ConnInfo pointer using the Pid
+func (pi *ProcessInfo) ConnectionByPid(pid int64) *ConnInfo {
 
-	for _, a := range pi.appsByPath {
+	for _, a := range pi.connInfo {
 		if a.Pid == pid {
 			return a
 		}
@@ -369,20 +116,9 @@ func (pi *ProcessInfo) AppInfoByPid(pid int64) *AppInfo {
 	return nil
 }
 
-// AppInfoByIndex returns the AppInfo pointer by the index
-func (pi *ProcessInfo) AppInfoByIndex(idx int) *AppInfo {
-
-	if idx >= 0 {
-		files := pi.Files()
-		if a, ok := pi.appsByPath[files[idx]]; ok {
-			return a
-		}
-	}
-	return nil
-}
-
+/*
 // Commands returns the list of commands
-func (pi *ProcessInfo) Commands(a *AppInfo) ([]string, error) {
+func (pi *ProcessInfo) Commands(a *ConnInfo) ([]string, error) {
 
 	d, err := pi.doCmd(a, "/")
 	if err != nil {
@@ -399,22 +135,27 @@ func (pi *ProcessInfo) Commands(a *AppInfo) ([]string, error) {
 
 	return data.Cmds, nil
 }
-
+*/
 // IssueCommand to the process socket
-func (pi *ProcessInfo) IssueCommand(a *AppInfo, str string) ([]byte, error) {
+func (pi *ProcessInfo) IssueCommand(a *ConnInfo, str string) ([]byte, error) {
 
 	return pi.doCmd(a, str)
 }
 
 // Unmarshal the JSON data into a structure
-func (pi *ProcessInfo) Unmarshal(command string, data interface{}) error {
+func (pi *ProcessInfo) Unmarshal(p *ConnInfo, command string, data interface{}) error {
 
-	p := pi.AppsList()
-	if len(p) == 0 {
-		return fmt.Errorf("No PCM data")
+	if len(pi.connInfo) == 0 {
+		return nil
 	}
-
-	d, err := pi.IssueCommand(p[0], command)
+	if p == nil {
+		// Get the first element of a map
+		for _, m := range pi.connInfo {
+			p = m
+			break
+		}
+	}
+	d, err := pi.IssueCommand(p, command)
 	if err != nil {
 		return err
 	}

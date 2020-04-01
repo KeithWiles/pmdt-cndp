@@ -125,12 +125,12 @@ func (pg *PageQPI) staticQPIData() {
 		return
 	}
 
-	if err := perfmon.pinfoPCM.Unmarshal("/pcm/system", &pg.system); err != nil {
+	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/system", &pg.system); err != nil {
 		tlog.ErrorPrintf("Unable to get PCM system information\n")
 		return
 	}
 
-	if err := perfmon.pinfoPCM.Unmarshal("/pcm/header", &pg.header); err != nil {
+	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/header", &pg.header); err != nil {
 		tlog.ErrorPrintf("Unable to get PCM system information\n")
 		return
 	}
@@ -197,7 +197,7 @@ func (pg *PageQPI) fillQPITable(view *tview.Table, row int, sCntr []pcm.QPISocke
 func (pg *PageQPI) displayQPITotals(view *tview.Table) {
 
 	qpi := pcm.QPI{}
-	if err := perfmon.pinfoPCM.Unmarshal("/pcm/qpi", &qpi); err != nil {
+	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/qpi", &qpi); err != nil {
 		tlog.ErrorPrintf("Unable to get QPI Totals: %v\n", err)
 		return
 	}

@@ -195,7 +195,7 @@ func (pg *PagePCI) displayPCI(view *tview.Table) {
 
 	row := 0
 
-	p := perfmon.pinfoPCM.AppsList()
+	p := perfmon.pinfoPCM.ConnectionList()
 	if len(p) == 0 {
 		return
 	}

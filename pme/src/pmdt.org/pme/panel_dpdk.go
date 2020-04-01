@@ -6,13 +6,14 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/rivo/tview"
 
+	"pmdt.org/dpdk"
 	"pmdt.org/graphdata"
 	"pmdt.org/pinfo"
-	"pmdt.org/dpdk"
 
 	cz "pmdt.org/colorize"
 	tab "pmdt.org/taborder"
@@ -122,18 +123,19 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 		clearScrollText(pg.dpdkInfo, pg.displayDPDKInfo, true)
 		clearScrollTable(pg.dpdkNet, pg.displayDPDKNet, true)
 	})
-	tlog.DoPrintf("Create DPDK ProcessInfo\n")
+
 	// Setup and locate the telemery socket connections
-	pg.pinfoDPDK = pinfo.NewProcessInfo("/var/run/dpdk", "dpdk_telemetry")
+	pg.pinfoDPDK = pinfo.New("/var/run/dpdk", "dpdk_telemetry")
 	if pg.pinfoDPDK == nil {
 		panic("unable to setup pinfoDPDK")
 	}
 
-	if err := pg.pinfoDPDK.Open(); err != nil {
+	if err := pg.pinfoDPDK.StartWatching(); err != nil {
 		panic(err)
 	}
-	defer pg.pinfoDPDK.Close()
+	defer pg.pinfoDPDK.StopWatching()
 
+	// Add a callback for this watcher
 	pg.pinfoDPDK.Add("panel_dpdk", func(event int) {
 		names := make([]interface{}, 0)
 
@@ -188,70 +190,29 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	return dpdkPanelName, pg.topFlex
 }
 
-// Callback routine to display the windows in the panel called 4 times
-// each step is part of a second, to allow for space out processing.
+func (pg *DPDKPanel) selectedConnection() (*pinfo.ConnInfo, error) {
+
+	pid, err := strconv.ParseInt(pg.selectApp.ItemValue().(string), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the current selected application if any are available
+	a := pg.pinfoDPDK.ConnectionByPid(pid)
+	if a == nil {
+		return nil, fmt.Errorf("failed to get connection pointer")
+	}
+
+	return a, nil
+}
+
 func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
-
-	pg.once.Do(func () {
-		pi := pg.pinfoDPDK
-
-		a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
-		if a == nil {
-			return
-		}
-
-		if err := pg.pinfoDPDK.Unmarshal("/eal/version", &pg.infoDPDK.Version); err != nil {
-			tlog.ErrorPrintf("Unable to get EAL version: %v\n", err)
-			return
-		}
-		tlog.DebugPrintf("EAL Version: %v\n", pg.infoDPDK.Version.Version)
-
-		if err := pg.pinfoDPDK.Unmarshal("/eal/params", &pg.infoDPDK.Params); err != nil {
-			tlog.ErrorPrintf("Unable to get EAL Parameters: %v\n", err)
-			return
-		}
-		tlog.DebugPrintf("EAL Parameters: %v\n", pg.infoDPDK.Params.Params)
-
-		if err := pg.pinfoDPDK.Unmarshal("/eal/app_params", &pg.infoDPDK.AppParams); err != nil {
-			tlog.ErrorPrintf("Unable to get EAL Application Parameters: %v\n", err)
-			return
-		}
-		tlog.DebugPrintf("EAL Application Parameters: %v\n", pg.infoDPDK.AppParams.Params)
-
-		if err := pg.pinfoDPDK.Unmarshal("/", &pg.infoDPDK.Cmds); err != nil {
-			tlog.ErrorPrintf("Unable to get EAL Commands: %v\n", err)
-			return
-		}
-		tlog.DebugPrintf("EAL Commands: %v\n", pg.infoDPDK.Cmds)
-
-		if err := pg.pinfoDPDK.Unmarshal("/ethdev/list", &pg.infoDPDK.PidList); err != nil {
-			tlog.ErrorPrintf("Unable to get Ethdev List information: %v\n", err)
-			return
-		}
-		tlog.DebugPrintf("EthdevList: %v\n", pg.infoDPDK.PidList)
-
-		// Output the basic data for the stats and information of a port
-		for _, pid := range pg.infoDPDK.PidList.Pids {
-
-			eth := dpdk.EthdevStats{}
-			cmd := fmt.Sprintf("/ethdev/stats,%d", pid)
-			if err := pg.pinfoDPDK.Unmarshal(cmd, &eth); err != nil {
-				tlog.WarnPrintf("Unable to get PCM system information\n")
-				continue
-			}
-			eth.Stats.PortID = pid
-			pg.infoDPDK.EthdevStats = append(pg.infoDPDK.EthdevStats, &eth)
-			tlog.DoPrintf("/ethdev/stats,%d: %+v\n", pid, eth)
-
-			// Update the previous stats
-			pg.infoDPDK.PrevStats[eth.Stats.PortID].Stats = eth.Stats
-
-			tlog.DebugPrintf("Prev: %+v\n", pg.infoDPDK.PrevStats[eth.Stats.PortID])
-		}
-	})
 
 	switch step {
 	case 0:
+		pg.collectStats()
+
+	case 3:
 		// Display the screens each second
 		pg.displayDPDKInfo(pg.dpdkInfo)
 		pg.displayDPDKNet(pg.dpdkNet)
@@ -260,7 +221,75 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 	}
 }
 
-// Display thebasic DPDK application information
+func (pg *DPDKPanel) getFixedData(a *pinfo.ConnInfo) {
+
+	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/version", &pg.infoDPDK.Version); err != nil {
+		tlog.ErrorPrintf("Unable to get EAL version: %v\n", err)
+		return
+	}
+	tlog.DebugPrintf("EAL Version: %v\n", pg.infoDPDK.Version.Version)
+
+	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/params", &pg.infoDPDK.Params); err != nil {
+		tlog.ErrorPrintf("Unable to get EAL Parameters: %v\n", err)
+		return
+	}
+	tlog.DebugPrintf("EAL Parameters: %v\n", pg.infoDPDK.Params.Params)
+
+	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/app_params", &pg.infoDPDK.AppParams); err != nil {
+		tlog.ErrorPrintf("Unable to get EAL Application Parameters: %v\n", err)
+		return
+	}
+	tlog.DebugPrintf("EAL Application Parameters: %v\n", pg.infoDPDK.AppParams.Params)
+
+	if err := pg.pinfoDPDK.Unmarshal(a, "/", &pg.infoDPDK.Cmds); err != nil {
+		tlog.ErrorPrintf("Unable to get EAL Commands: %v\n", err)
+		return
+	}
+	tlog.DebugPrintf("EAL Commands: %v\n", pg.infoDPDK.Cmds)
+
+	if err := pg.pinfoDPDK.Unmarshal(a, "/ethdev/list", &pg.infoDPDK.PidList); err != nil {
+		tlog.ErrorPrintf("Unable to get Ethdev List information: %v\n", err)
+		return
+	}
+	tlog.DebugPrintf("EthdevList: %v\n", pg.infoDPDK.PidList)
+}
+
+func (pg *DPDKPanel) getEthdevStats(a *pinfo.ConnInfo) {
+
+	// Clear the previous stats
+	pg.infoDPDK.EthdevStats = nil
+
+	// Output the basic data for the stats and information of a port
+	for _, pid := range pg.infoDPDK.PidList.Pids {
+
+		eth := dpdk.EthdevStats{}
+		cmd := fmt.Sprintf("/ethdev/stats,%d", pid)
+		if err := pg.pinfoDPDK.Unmarshal(a, cmd, &eth); err != nil {
+			tlog.WarnPrintf("Unable to get Ethdev Stats for Port %d\n", pid)
+			continue
+		}
+		eth.Stats.PortID = pid
+		pg.infoDPDK.EthdevStats = append(pg.infoDPDK.EthdevStats, &eth)
+		tlog.DebugPrintf("/ethdev/stats,%d: %+v\n", pid, eth)
+
+		// Update the previous stats
+		pg.infoDPDK.PrevStats[eth.Stats.PortID].Stats = eth.Stats
+
+		tlog.DebugPrintf("Prev: %+v\n", pg.infoDPDK.PrevStats[eth.Stats.PortID])
+	}
+}
+
+func (pg *DPDKPanel) collectStats() {
+
+	a, err := pg.selectedConnection()
+	if err != nil {
+		return
+	}
+	pg.getFixedData(a)
+	pg.getEthdevStats(a)
+}
+
+// Display the basic DPDK application information
 func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 
 	if view == nil {
@@ -269,12 +298,6 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 	}
 
 	w := -14
-
-	// Find the current selected application if any are available
-	a := pg.pinfoDPDK.AppInfoByIndex(pg.selectApp.ItemIndex())
-	if a == nil {
-		return
-	}
 
 	info := pg.infoDPDK
 	// Set the speed/duplex and rate in the window
@@ -298,31 +321,6 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 		tlog.DoPrintf("displayDPDKNet: view is nil\n")
 		return
 	}
-	a := pg.pinfoDPDK.AppInfoByIndex(pg.selectApp.ItemIndex())
-	if a == nil {
-		return
-	}
-
-	if err := pg.pinfoDPDK.Unmarshal("/ethdev/list", &pg.infoDPDK.PidList); err != nil {
-		tlog.ErrorPrintf("Unable to get Ethdev List information: %v\n", err)
-		return
-	}
-	tlog.DebugPrintf("EthdevList: %v\n", pg.infoDPDK.PidList)
-
-	// Output the basic data for the stats and information of a port
-	for _, pid := range pg.infoDPDK.PidList.Pids {
-
-		eth := dpdk.EthdevStats{}
-		cmd := fmt.Sprintf("%s,%d", "/ethdev/stats", pid)
-		if err := pg.pinfoDPDK.Unmarshal(cmd, &eth); err != nil {
-			tlog.WarnPrintf("Unable to get PCM system information\n")
-			continue
-		}
-		eth.Stats.PortID = pid
-		pg.infoDPDK.EthdevStats = append(pg.infoDPDK.EthdevStats, &eth)
-		tlog.DoPrintf("%s,%d: %+v\n", "/ethdev/stats", pid, eth)
-	}
-
 	// Routine to help set the table cell
 	setCell := func(row, col int, value string, left bool) (int, int) {
 
@@ -379,58 +377,23 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 		pktsIn := stats.InPackets - prevStats.InPackets
 		pktsOut := stats.OutPackets - prevStats.OutPackets
 
-		pg.infoDPDK.PrevStats[eth.Stats.PortID] = *eth
-
 		mbpsRx += BitRate(pktsIn, bytesIn)
 		mbpsTx += BitRate(pktsOut, bytesOut)
+
+		tlog.DebugPrintf("%d: Bytes in/out %d/%d, Pkts in/out %d/%d, Mbps in/out %.2f/%.2f\n",
+			eth.Stats.PortID, bytesIn, bytesOut, pktsIn, pktsOut, mbpsRx, mbpsTx)
+
+		pg.infoDPDK.PrevStats[eth.Stats.PortID] = *eth
 
 		// Update the previous stats
 		pg.infoDPDK.PrevStats[eth.Stats.PortID].Stats = eth.Stats
 
-		tlog.DoPrintf("Prev: %+v\n\n", pg.infoDPDK.PrevStats[eth.Stats.PortID])
+		tlog.DebugPrintf("Prev: %+v\n\n", pg.infoDPDK.PrevStats[eth.Stats.PortID])
 	}
+	tlog.DebugPrintf("\n")
 
 	pg.data.rxPoints.GraphPoints(0).AddPoint(mbpsRx/(1024.0 * 1024.0))
 	pg.data.txPoints.GraphPoints(0).AddPoint(mbpsTx/(1024.0 * 1024.0))
-}
-
-
-// Display theper queue stats per port
-func (pg *DPDKPanel) displayDPDKQueue(view *tview.Table) {
-
-	if view == nil {
-		tlog.DoPrintf("displayDPDKNet: view is nil\n")
-		return
-	}
-/*
-	pi := pg.pinfoDPDK
-	a := pi.AppInfoByIndex(pg.selectApp.ItemIndex())
-	if a == nil {
-		return
-	}
-
-	// Table cell setup routine
-	setCell := func(row, col int, value string, left bool) (int, int) {
-
-		cell := SetCell(view, row, col, value, true)
-		if left {
-			cell.SetAlign(tview.AlignLeft)
-		}
-
-		return row + 1, col + 1
-	}
-
-	row := 0
-	col := 0
-
-	//	eth, _ := pi.EthdevList(a)
-
-	queues := []string{"port", "q_ipackets", "q_opackets", "q_ibytes", "q_obytes", "q_errors"}
-
-	for i, n := range queues {
-		setCell(row+i, col, cz.Orange(n), false)
-	}
-*/
 }
 
 // Display to update the graphs on the panel

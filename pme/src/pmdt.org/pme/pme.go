@@ -97,7 +97,7 @@ func init() {
 	}
 
 	// Setup and locate the process info socket connections
-	perfmon.pinfoPCM = pinfo.NewProcessInfo("/var/run/pcm-info", "pinfo")
+	perfmon.pinfoPCM = pinfo.New("/var/run/pcm-info", "pinfo")
 	if perfmon.pinfoPCM == nil {
 		panic("unable to setup pinfoPCM")
 	}
@@ -232,10 +232,10 @@ func main() {
 		time.Sleep(time.Second * time.Duration(options.WaitTime))
 	}
 
-	if err := perfmon.pinfoPCM.Open(); err != nil {
+	if err := perfmon.pinfoPCM.StartWatching(); err != nil {
 		panic(err)
 	}
-	defer perfmon.pinfoPCM.Close()
+	defer perfmon.pinfoPCM.StopWatching()
 
 	// Start the application.
 	if err := app.SetRoot(panel, true).Run(); err != nil {

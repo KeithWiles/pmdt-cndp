@@ -124,12 +124,12 @@ func (pg *PageCore) staticCoreData() {
 		return
 	}
 
-	if err := perfmon.pinfoPCM.Unmarshal("/pcm/system", &pg.system); err != nil {
+	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/system", &pg.system); err != nil {
 		tlog.ErrorPrintf("Unable to get PCM system information\n")
 		return
 	}
 
-	if err := perfmon.pinfoPCM.Unmarshal("/pcm/header", &pg.header); err != nil {
+	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/header", &pg.header); err != nil {
 		tlog.ErrorPrintf("Unable to get PCM header information\n")
 		return
 	}
@@ -177,7 +177,7 @@ func (pg *PageCore) displayCoreSystem(view *tview.Table) {
 
 func (pg *PageCore) displayCore(view *tview.Table) {
 
-	p := perfmon.pinfoPCM.AppsList()
+	p := perfmon.pinfoPCM.ConnectionList()
 	if len(p) == 0 {
 		return
 	}
@@ -199,7 +199,7 @@ func (pg *PageCore) displayCore(view *tview.Table) {
 	for i, j := 0, row; i < num; i++ {
 
 		core := pcm.CoreCounters{}
-		if err := perfmon.pinfoPCM.Unmarshal(fmt.Sprintf("/pcm/core,%d", i), &core); err != nil {
+		if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &core); err != nil {
 			tlog.ErrorPrintf("Unable to get PCM system information\n")
 			return
 		}
