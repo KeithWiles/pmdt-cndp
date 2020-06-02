@@ -143,6 +143,7 @@ func main() {
 		PCIPanelSetup,
 		QPIPanelSetup,
 		PBFPanelSetup,
+		AVXPanelSetup,
 	}
 
 	// The bottom row has some info on where we are.

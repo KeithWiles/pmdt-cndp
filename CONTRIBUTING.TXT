@@ -1,7 +1,7 @@
 Contributors Guide
 ==================
 
-This document outlines how to contribute code to the PKTGEN project.
+This document outlines how to contribute code to the PMDT project.
 
 Getting the code
 ----------------

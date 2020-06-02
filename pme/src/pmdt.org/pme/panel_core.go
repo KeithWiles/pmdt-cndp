@@ -10,27 +10,33 @@ import (
 	"github.com/rivo/tview"
 	cz "pmdt.org/colorize"
 	"pmdt.org/graphdata"
-	"pmdt.org/pcm"
+	pcm "pmdt.org/pcm"
 	"pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )
 
 // PageCore - Data for main page information
 type PageCore struct {
-	pcmRunning bool
-	cmd        *exec.Cmd
-	tabOrder   *taborder.Tab
-	topFlex    *tview.Flex
-	title      *tview.Box
-	CoreSystem *tview.Table
-	Core       *tview.Table
-	CoreCharts [2]*tview.TextView
+	pcmRunning       bool
+	cmd              *exec.Cmd
+	tabOrder         *taborder.Tab
+	topFlex          *tview.Flex
+	title            *tview.Box
+	selectCore       *SelectWindow
+	selectCoreRange  *SelectWindow
+	CoreSystem       *tview.Table
+	Core             *tview.Table
+	CoreCharts       [2]*tview.TextView
+	chart            *tview.Table
+	selected         int
+	selectionChanged bool
 
 	system pcm.System
 	header pcm.Header
 	valid  bool
 
 	charts                 *graphdata.GraphInfo
+	ipc                    *graphdata.GraphInfo
 	CoreRedraw, coreRedraw bool
 }
 
@@ -44,7 +50,8 @@ func setupCore() *PageCore {
 
 	pg := &PageCore{pcmRunning: false}
 
-	pg.charts = graphdata.NewGraph(2)
+	// create "graph" for each core
+	pg.charts = graphdata.NewGraph(NumCPUs() * 2) //2)
 	for _, gd := range pg.charts.Graphs() {
 		gd.SetMaxPoints(maxCorePoints)
 	}
@@ -63,28 +70,82 @@ func CorePanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	pg.tabOrder = to
 
 	flex0 := tview.NewFlex().SetDirection(tview.FlexRow)
-	flex1 := tview.NewFlex().SetDirection(tview.FlexRow)
-	flex2 := tview.NewFlex().SetDirection(tview.FlexColumn)
+	flex1 := tview.NewFlex().SetDirection(tview.FlexColumn)
+	flex2 := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex3 := tview.NewFlex().SetDirection(tview.FlexColumn)
 
 	TitleBox(flex0)
 	pg.topFlex = flex0
 
-	pg.CoreSystem = CreateTableView(flex1, "System (1)", tview.AlignLeft, 4, 1, true)
-	pg.Core = CreateTableView(flex1, "Core Counters (2)", tview.AlignLeft, 0, 1, true)
+	pg.CoreSystem = CreateTableView(flex0, "System (1)", tview.AlignLeft, 4, 1, true)
+
+	// Core selection window to be able to select a core to view
+	table := CreateTableView(flex1, "Core (c)", tview.AlignLeft, 20, 1, true)
+
+	// Select window setup and callback function when selection changes.
+	pg.selectCore = NewSelectWindow(table, "CoreCounters", 0, func(row, col int) {
+
+		if row != pg.selected {
+			pg.selectCore.UpdateItem(row, col)
+
+			pg.selectionChanged = true
+
+			pg.selected = row
+			// pg.chart.SetTitle(TitleColor(fmt.Sprintf("CPU %d (c)", pg.selected)))
+		}
+	})
+
+	names := make([]interface{}, 0)
+
+	for i := 0; i < NumCPUs(); i++ {
+		s := fmt.Sprintf("%4d", i)
+		names = append(names, s)
+	}
+	pg.selectCore.AddColumn(-1, names, cz.SkyBlueColor)
+
+	pg.CoreCharts[0] = CreateTextView(flex2, "IPC Charts (2)", tview.AlignLeft, 0, 1, true)
+	pg.CoreCharts[1] = CreateTextView(flex2, "Core Charts (3)", tview.AlignLeft, 0, 1, true)
+
+	flex1.AddItem(flex2, 0, 2, true)
+
+	flex0.AddItem(flex1, 0, 2, true)
+
+	// Core range selection window to display counters
+	table1 := CreateTableView(flex3, "Core Range (r)", tview.AlignLeft, 20, 24, true)
+
+	// Select window setup and callback function when selection changes.
+	pg.selectCoreRange = NewSelectWindow(table1, "Core Counters", 0, func(row, col int) {
+
+		if row != pg.selected {
+			pg.selectCoreRange.UpdateItem(row, col)
+
+			pg.selectionChanged = true
+
+			pg.selected = row
+			pg.Core.SetTitle(TitleColor(fmt.Sprintf("Core Counters %d (4)", pg.selected)))
+		}
+	})
+
+	namesRange := make([]interface{}, 0)
+
+	for i := 0; i < NumCPUs(); i++ {
+		s := fmt.Sprintf("%4d", i)
+		namesRange = append(names, s)
+	}
+	pg.selectCoreRange.AddColumn(-1, namesRange, cz.SkyBlueColor)
+
+	pg.Core = CreateTableView(flex3, "Core Counters (4)", tview.AlignLeft, 0, 1, true)
 	pg.Core.SetFixed(2, 1)
 	pg.Core.SetSeparator(tview.Borders.Vertical)
 
-	flex0.AddItem(flex1, 0, 4, true)
-
-	pg.CoreCharts[0] = CreateTextView(flex2, "IPC Charts (3)", tview.AlignLeft, 0, 1, true)
-	pg.CoreCharts[1] = CreateTextView(flex2, "Core Charts (4)", tview.AlignLeft, 0, 1, true)
-
-	flex0.AddItem(flex2, 0, 2, true)
+	flex0.AddItem(flex3, 24, 4, true)
 
 	to.Add(pg.CoreSystem, '1')
-	to.Add(pg.Core, '2')
-	to.Add(pg.CoreCharts[0], '3')
-	to.Add(pg.CoreCharts[1], '4')
+	to.Add(pg.selectCore.table, 'c')
+	to.Add(pg.CoreCharts[0], '2')
+	to.Add(pg.CoreCharts[1], '3')
+	to.Add(pg.selectCoreRange.table, 'r')
+	to.Add(pg.Core, '4')
 
 	to.SetInputDone()
 
@@ -110,9 +171,11 @@ func (pg *PageCore) displayCorePage(step int, ticks uint64) {
 	case 0: // Display the data that was gathered
 		pg.staticCoreData()
 
+		// Collect Data for both charts
 		pg.collectData()
 		pg.displayCoreSystem(pg.CoreSystem)
 		pg.displayCore(pg.Core)
+		//pg.displayCharts()
 		pg.displayCharts(pg.CoreCharts[0], 0, 0)
 		pg.displayCharts(pg.CoreCharts[1], 1, 1)
 	}
@@ -137,7 +200,32 @@ func (pg *PageCore) staticCoreData() {
 	pg.valid = true
 }
 
+/*
+func (pg *PagePBF) collectChartData() {
+
+	for cpu, gd := range pg.freqs.Graphs() {
+		p := pbf.InfoPerCPU(cpu)
+
+		// Append the frequency data to the list for the graphing in a chart
+		gd.AddPoint(float64(p.CurFreq))
+	}
+}
+
+*/
 func (pg *PageCore) collectData() {
+
+	core := pcm.CoreCounters{}
+	if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", pg.selected), &core); err != nil {
+		tlog.ErrorPrintf("Unable to get PCM system information\n")
+		return
+	}
+
+	gd1 := pg.charts.WithIndex(0)
+	gd1.AddPoint(float64(core.InstructionsPerCycle))
+
+	gd2 := pg.charts.WithIndex(1)
+	gd2.AddPoint(float64(core.Cycles))
+
 	/*
 		core := pg.pcmState.PCMCounters.Core
 
@@ -240,4 +328,21 @@ func (pg *PageCore) displayCore(view *tview.Table) {
 func (pg *PageCore) displayCharts(view *tview.TextView, start, end int) {
 
 	view.SetText(pg.charts.MakeChart(view, start, end))
+	//pg.CoreCharts[0].SetText(pg.charts.MakeChart(pg.CoreCharts[0], pg.selected, pg.selected))
+	//pg.CoreCharts[1].SetText(pg.charts.MakeChart(pg.CoreCharts[1], pg.selected, pg.selected))
 }
+
+/*
+func (pg *PageCore) displayCharts(view *tview.TextView, start, end int) {
+
+	view.SetText(pg.charts.MakeChart(view, start, end))
+}
+
+
+
+// Display the Frequency values in the text view using a graph or chart
+func (pg *PagePBF) displayFreqChart() {
+
+	pg.chart.SetText(pg.freqs.MakeChart(pg.chart, pg.selected, pg.selected))
+}
+*/

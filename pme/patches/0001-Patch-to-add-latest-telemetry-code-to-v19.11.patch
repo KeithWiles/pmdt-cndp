@@ -1,0 +1,7032 @@
+From 678a4633d1638b8c9ba8c2a73d72592049f70fca Mon Sep 17 00:00:00 2001
+From: sklober <savannah.loberger@intel.com>
+Date: Mon, 1 Jun 2020 09:56:03 -0700
+Subject: [PATCH] Patch to add latest telemetry code to v19.11
+
+---
+ config/common_base                                |    2 +-
+ config/meson.build                                |    7 -
+ examples/l3fwd-power/Makefile                     |    2 +-
+ examples/l3fwd-power/main.c                       |  214 ++-
+ examples/l3fwd-power/meson.build                  |    2 +-
+ kernel/linux/kni/compat.h                         |    4 +
+ kernel/linux/kni/kni_net.c                        |    5 +
+ lib/Makefile                                      |   14 +-
+ lib/librte_eal/common/eal_common_options.c        |   80 +-
+ lib/librte_eal/common/eal_internal_cfg.h          |    1 +
+ lib/librte_eal/common/eal_options.h               |    9 +
+ lib/librte_eal/common/include/rte_common.h        |   39 +-
+ lib/librte_eal/freebsd/eal/Makefile               |    1 +
+ lib/librte_eal/freebsd/eal/eal.c                  |   13 +
+ lib/librte_eal/freebsd/eal/meson.build            |    2 +-
+ lib/librte_eal/linux/eal/Makefile                 |    1 +
+ lib/librte_eal/linux/eal/eal.c                    |   16 +
+ lib/librte_eal/linux/eal/meson.build              |    2 +-
+ lib/librte_ethdev/rte_ethdev.c                    |  101 ++
+ lib/librte_metrics/Makefile                       |   10 +
+ lib/librte_metrics/meson.build                    |    9 +
+ lib/librte_metrics/rte_metrics.c                  |   13 +-
+ lib/librte_metrics/rte_metrics.h                  |    5 +-
+ lib/librte_metrics/rte_metrics_telemetry.c        |  541 ++++++
+ lib/librte_metrics/rte_metrics_telemetry.h        |   65 +
+ lib/librte_metrics/rte_metrics_version.map        |    7 +
+ lib/librte_rawdev/meson.build                     |    2 +
+ lib/librte_rawdev/rte_rawdev.c                    |   73 +
+ lib/librte_telemetry/Makefile                     |   17 +-
+ lib/librte_telemetry/meson.build                  |   16 +-
+ lib/librte_telemetry/rte_telemetry.c              | 1895 ---------------------
+ lib/librte_telemetry/rte_telemetry.h              |  246 ++-
+ lib/librte_telemetry/rte_telemetry_internal.h     |  112 --
+ lib/librte_telemetry/rte_telemetry_legacy.h       |   87 +
+ lib/librte_telemetry/rte_telemetry_parser.c       |  682 --------
+ lib/librte_telemetry/rte_telemetry_parser.h       |   15 -
+ lib/librte_telemetry/rte_telemetry_parser_test.c  |  535 ------
+ lib/librte_telemetry/rte_telemetry_socket_tests.h |   36 -
+ lib/librte_telemetry/rte_telemetry_version.map    |   14 +-
+ lib/librte_telemetry/telemetry.c                  |  412 +++++
+ lib/librte_telemetry/telemetry_data.c             |  130 ++
+ lib/librte_telemetry/telemetry_data.h             |   46 +
+ lib/librte_telemetry/telemetry_json.h             |  158 ++
+ lib/librte_telemetry/telemetry_legacy.c           |  241 +++
+ lib/meson.build                                   |   10 +-
+ meson.build                                       |    9 +
+ mk/rte.app.mk                                     |   11 +-
+ mk/target/generic/rte.vars.mk                     |    1 +
+ usertools/dpdk-telemetry.py                       |   83 +
+ usertools/meson.build                             |    2 +-
+ 50 files changed, 2548 insertions(+), 3450 deletions(-)
+ create mode 100644 lib/librte_metrics/rte_metrics_telemetry.c
+ create mode 100644 lib/librte_metrics/rte_metrics_telemetry.h
+ delete mode 100644 lib/librte_telemetry/rte_telemetry.c
+ delete mode 100644 lib/librte_telemetry/rte_telemetry_internal.h
+ create mode 100644 lib/librte_telemetry/rte_telemetry_legacy.h
+ delete mode 100644 lib/librte_telemetry/rte_telemetry_parser.c
+ delete mode 100644 lib/librte_telemetry/rte_telemetry_parser.h
+ delete mode 100644 lib/librte_telemetry/rte_telemetry_parser_test.c
+ delete mode 100644 lib/librte_telemetry/rte_telemetry_socket_tests.h
+ create mode 100644 lib/librte_telemetry/telemetry.c
+ create mode 100644 lib/librte_telemetry/telemetry_data.c
+ create mode 100644 lib/librte_telemetry/telemetry_data.h
+ create mode 100644 lib/librte_telemetry/telemetry_json.h
+ create mode 100644 lib/librte_telemetry/telemetry_legacy.c
+ create mode 100755 usertools/dpdk-telemetry.py
+
+diff --git a/config/common_base b/config/common_base
+index 7dec7ed..a12e6cc 100644
+--- a/config/common_base
++++ b/config/common_base
+@@ -898,7 +898,7 @@ CONFIG_RTE_LIBRTE_BITRATE=y
+ CONFIG_RTE_LIBRTE_LATENCY_STATS=y
+ 
+ #
+-# Compile librte_telemetry
++# Compile librte_telemetry legacy support
+ #
+ CONFIG_RTE_LIBRTE_TELEMETRY=n
+ 
+diff --git a/config/meson.build b/config/meson.build
+index 364a8d7..0e9d574 100644
+--- a/config/meson.build
++++ b/config/meson.build
+@@ -205,13 +205,6 @@ dpdk_conf.set('RTE_LIBRTE_DPAA2_USE_PHYS_IOVA', true)
+ 
+ 
+ compile_time_cpuflags = []
+-if host_machine.cpu_family().startswith('x86')
+-	arch_subdir = 'x86'
+-elif host_machine.cpu_family().startswith('arm') or host_machine.cpu_family().startswith('aarch')
+-	arch_subdir = 'arm'
+-elif host_machine.cpu_family().startswith('ppc')
+-	arch_subdir = 'ppc_64'
+-endif
+ subdir(arch_subdir)
+ dpdk_conf.set('RTE_COMPILE_TIME_CPUFLAGS', ','.join(compile_time_cpuflags))
+ 
+diff --git a/examples/l3fwd-power/Makefile b/examples/l3fwd-power/Makefile
+index 729d496..852877c 100644
+--- a/examples/l3fwd-power/Makefile
++++ b/examples/l3fwd-power/Makefile
+@@ -60,7 +60,7 @@ else
+ CFLAGS += -DALLOW_EXPERIMENTAL_API
+ CFLAGS += -O3
+ CFLAGS += $(WERROR_FLAGS)
+-LDLIBS += -lm
++LDLIBS += -lm -lrte_telemetry
+ 
+ # workaround for a gcc bug with noreturn attribute
+ # http://gcc.gnu.org/bugzilla/show_bug.cgi?id=12603
+diff --git a/examples/l3fwd-power/main.c b/examples/l3fwd-power/main.c
+index d049d8a..9db94ce 100644
+--- a/examples/l3fwd-power/main.c
++++ b/examples/l3fwd-power/main.c
+@@ -46,6 +46,7 @@
+ #include <rte_spinlock.h>
+ #include <rte_power_empty_poll.h>
+ #include <rte_metrics.h>
++#include <rte_telemetry.h>
+ 
+ #include "perf_core.h"
+ #include "main.h"
+@@ -131,7 +132,7 @@
+ #define EMPTY_POLL_MED_THRESHOLD 350000UL
+ #define EMPTY_POLL_HGH_THRESHOLD 580000UL
+ 
+-
++#define NUM_TELSTATS RTE_DIM(telstats_strings)
+ 
+ static uint16_t nb_rxd = RTE_TEST_RX_DESC_DEFAULT;
+ static uint16_t nb_txd = RTE_TEST_TX_DESC_DEFAULT;
+@@ -238,8 +239,7 @@ static struct lcore_params lcore_params_array_default[] = {
+ };
+ 
+ struct lcore_params *lcore_params = lcore_params_array_default;
+-uint16_t nb_lcore_params = sizeof(lcore_params_array_default) /
+-				sizeof(lcore_params_array_default[0]);
++uint16_t nb_lcore_params = RTE_DIM(lcore_params_array_default);
+ 
+ static struct rte_eth_conf port_conf = {
+ 	.rxmode = {
+@@ -281,7 +281,7 @@ struct ipv4_5tuple {
+ 	uint16_t port_dst;
+ 	uint16_t port_src;
+ 	uint8_t  proto;
+-} __attribute__((__packed__));
++} __rte_packed;
+ 
+ struct ipv6_5tuple {
+ 	uint8_t  ip_dst[IPV6_ADDR_LEN];
+@@ -289,7 +289,7 @@ struct ipv6_5tuple {
+ 	uint16_t port_dst;
+ 	uint16_t port_src;
+ 	uint8_t  proto;
+-} __attribute__((__packed__));
++} __rte_packed;
+ 
+ struct ipv4_l3fwd_route {
+ 	struct ipv4_5tuple key;
+@@ -326,12 +326,6 @@ static lookup_struct_t *ipv6_l3fwd_lookup_struct[NB_SOCKETS];
+ 
+ #define L3FWD_HASH_ENTRIES	1024
+ 
+-#define IPV4_L3FWD_NUM_ROUTES \
+-	(sizeof(ipv4_l3fwd_route_array) / sizeof(ipv4_l3fwd_route_array[0]))
+-
+-#define IPV6_L3FWD_NUM_ROUTES \
+-	(sizeof(ipv6_l3fwd_route_array) / sizeof(ipv6_l3fwd_route_array[0]))
+-
+ static uint16_t ipv4_l3fwd_out_if[L3FWD_HASH_ENTRIES] __rte_cache_aligned;
+ static uint16_t ipv6_l3fwd_out_if[L3FWD_HASH_ENTRIES] __rte_cache_aligned;
+ #endif
+@@ -354,9 +348,6 @@ static struct ipv4_l3fwd_route ipv4_l3fwd_route_array[] = {
+ 	{RTE_IPV4(8,1,1,0), 24, 7},
+ };
+ 
+-#define IPV4_L3FWD_NUM_ROUTES \
+-	(sizeof(ipv4_l3fwd_route_array) / sizeof(ipv4_l3fwd_route_array[0]))
+-
+ #define IPV4_L3FWD_LPM_MAX_RULES     1024
+ 
+ typedef struct rte_lpm lookup_struct_t;
+@@ -432,47 +423,16 @@ static int is_done(void)
+ static void
+ signal_exit_now(int sigtype)
+ {
+-	unsigned lcore_id;
+-	unsigned int portid;
+-	int ret;
+-
+-	if (sigtype == SIGINT) {
+-		if (app_mode == APP_MODE_EMPTY_POLL ||
+-				app_mode == APP_MODE_TELEMETRY)
+-			quit_signal = true;
+-
+-
+-		for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
+-			if (rte_lcore_is_enabled(lcore_id) == 0)
+-				continue;
+-
+-			/* init power management library */
+-			ret = rte_power_exit(lcore_id);
+-			if (ret)
+-				rte_exit(EXIT_FAILURE, "Power management "
+-					"library de-initialization failed on "
+-							"core%u\n", lcore_id);
+-		}
+ 
+-		if (app_mode != APP_MODE_EMPTY_POLL) {
+-			RTE_ETH_FOREACH_DEV(portid) {
+-				if ((enabled_port_mask & (1 << portid)) == 0)
+-					continue;
+-
+-				rte_eth_dev_stop(portid);
+-				rte_eth_dev_close(portid);
+-			}
+-		}
+-	}
++	if (sigtype == SIGINT)
++		quit_signal = true;
+ 
+-	if (app_mode != APP_MODE_EMPTY_POLL)
+-		rte_exit(EXIT_SUCCESS, "User forced exit\n");
+ }
+ 
+ /*  Freqency scale down timer callback */
+ static void
+-power_timer_cb(__attribute__((unused)) struct rte_timer *tim,
+-			  __attribute__((unused)) void *arg)
++power_timer_cb(__rte_unused struct rte_timer *tim,
++			  __rte_unused void *arg)
+ {
+ 	uint64_t hz;
+ 	float sleep_time_ratio;
+@@ -864,35 +824,40 @@ power_freq_scaleup_heuristic(unsigned lcore_id,
+ static int
+ sleep_until_rx_interrupt(int num)
+ {
++	/*
++	 * we want to track when we are woken up by traffic so that we can go
++	 * back to sleep again without log spamming.
++	 */
++	static bool timeout;
+ 	struct rte_epoll_event event[num];
+ 	int n, i;
+ 	uint16_t port_id;
+ 	uint8_t queue_id;
+ 	void *data;
+ 
+-	RTE_LOG(INFO, L3FWD_POWER,
+-		"lcore %u sleeps until interrupt triggers\n",
+-		rte_lcore_id());
++	if (!timeout) {
++		RTE_LOG(INFO, L3FWD_POWER,
++				"lcore %u sleeps until interrupt triggers\n",
++				rte_lcore_id());
++	}
+ 
+-	n = rte_epoll_wait(RTE_EPOLL_PER_THREAD, event, num, -1);
++	n = rte_epoll_wait(RTE_EPOLL_PER_THREAD, event, num, 10);
+ 	for (i = 0; i < n; i++) {
+ 		data = event[i].epdata.data;
+ 		port_id = ((uintptr_t)data) >> CHAR_BIT;
+ 		queue_id = ((uintptr_t)data) &
+ 			RTE_LEN2MASK(CHAR_BIT, uint8_t);
+-		rte_spinlock_lock(&(locks[port_id]));
+-		rte_eth_dev_rx_intr_disable(port_id, queue_id);
+-		rte_spinlock_unlock(&(locks[port_id]));
+ 		RTE_LOG(INFO, L3FWD_POWER,
+ 			"lcore %u is waked up from rx interrupt on"
+ 			" port %d queue %d\n",
+ 			rte_lcore_id(), port_id, queue_id);
+ 	}
++	timeout = n == 0;
+ 
+ 	return 0;
+ }
+ 
+-static void turn_on_intr(struct lcore_conf *qconf)
++static void turn_on_off_intr(struct lcore_conf *qconf, bool on)
+ {
+ 	int i;
+ 	struct lcore_rx_queue *rx_queue;
+@@ -905,7 +870,10 @@ static void turn_on_intr(struct lcore_conf *qconf)
+ 		queue_id = rx_queue->queue_id;
+ 
+ 		rte_spinlock_lock(&(locks[port_id]));
+-		rte_eth_dev_rx_intr_enable(port_id, queue_id);
++		if (on)
++			rte_eth_dev_rx_intr_enable(port_id, queue_id);
++		else
++			rte_eth_dev_rx_intr_disable(port_id, queue_id);
+ 		rte_spinlock_unlock(&(locks[port_id]));
+ 	}
+ }
+@@ -937,7 +905,7 @@ static int event_register(struct lcore_conf *qconf)
+ }
+ /* main processing loop */
+ static int
+-main_telemetry_loop(__attribute__((unused)) void *dummy)
++main_telemetry_loop(__rte_unused void *dummy)
+ {
+ 	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+ 	unsigned int lcore_id;
+@@ -1057,7 +1025,7 @@ main_telemetry_loop(__attribute__((unused)) void *dummy)
+ }
+ /* main processing loop */
+ static int
+-main_empty_poll_loop(__attribute__((unused)) void *dummy)
++main_empty_poll_loop(__rte_unused void *dummy)
+ {
+ 	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+ 	unsigned int lcore_id;
+@@ -1161,7 +1129,7 @@ main_empty_poll_loop(__attribute__((unused)) void *dummy)
+ }
+ /* main processing loop */
+ static int
+-main_loop(__attribute__((unused)) void *dummy)
++main_loop(__rte_unused void *dummy)
+ {
+ 	struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+ 	unsigned lcore_id;
+@@ -1206,7 +1174,7 @@ main_loop(__attribute__((unused)) void *dummy)
+ 	else
+ 		RTE_LOG(INFO, L3FWD_POWER, "RX interrupt won't enable.\n");
+ 
+-	while (1) {
++	while (!is_done()) {
+ 		stats[lcore_id].nb_iteration_looped++;
+ 
+ 		cur_tsc = rte_rdtsc();
+@@ -1338,20 +1306,24 @@ main_loop(__attribute__((unused)) void *dummy)
+ 				 */
+ 				rte_delay_us(lcore_idle_hint);
+ 			else {
+-				/* suspend until rx interrupt trigges */
++				/* suspend until rx interrupt triggers */
+ 				if (intr_en) {
+-					turn_on_intr(qconf);
++					turn_on_off_intr(qconf, 1);
+ 					sleep_until_rx_interrupt(
+ 						qconf->n_rx_queue);
++					turn_on_off_intr(qconf, 0);
+ 					/**
+ 					 * start receiving packets immediately
+ 					 */
+-					goto start_rx;
++					if (likely(!is_done()))
++						goto start_rx;
+ 				}
+ 			}
+ 			stats[lcore_id].sleep_time += lcore_idle_hint;
+ 		}
+ 	}
++
++	return 0;
+ }
+ 
+ static int
+@@ -1841,7 +1813,7 @@ setup_hash(int socketid)
+ 
+ 
+ 	/* populate the ipv4 hash */
+-	for (i = 0; i < IPV4_L3FWD_NUM_ROUTES; i++) {
++	for (i = 0; i < RTE_DIM(ipv4_l3fwd_route_array); i++) {
+ 		ret = rte_hash_add_key (ipv4_l3fwd_lookup_struct[socketid],
+ 				(void *) &ipv4_l3fwd_route_array[i].key);
+ 		if (ret < 0) {
+@@ -1854,7 +1826,7 @@ setup_hash(int socketid)
+ 	}
+ 
+ 	/* populate the ipv6 hash */
+-	for (i = 0; i < IPV6_L3FWD_NUM_ROUTES; i++) {
++	for (i = 0; i < RTE_DIM(ipv6_l3fwd_route_array); i++) {
+ 		ret = rte_hash_add_key (ipv6_l3fwd_lookup_struct[socketid],
+ 				(void *) &ipv6_l3fwd_route_array[i].key);
+ 		if (ret < 0) {
+@@ -1891,7 +1863,7 @@ setup_lpm(int socketid)
+ 				" on socket %d\n", socketid);
+ 
+ 	/* populate the LPM table */
+-	for (i = 0; i < IPV4_L3FWD_NUM_ROUTES; i++) {
++	for (i = 0; i < RTE_DIM(ipv4_l3fwd_route_array); i++) {
+ 		ret = rte_lpm_add(ipv4_l3fwd_lookup_struct[socketid],
+ 			ipv4_l3fwd_route_array[i].ip,
+ 			ipv4_l3fwd_route_array[i].depth,
+@@ -1997,7 +1969,7 @@ check_all_ports_link_status(uint32_t port_mask)
+ 						"Mbps - %s\n", (uint8_t)portid,
+ 						(unsigned)link.link_speed,
+ 				(link.link_duplex == ETH_LINK_FULL_DUPLEX) ?
+-					("full-duplex") : ("half-duplex\n"));
++					("full-duplex") : ("half-duplex"));
+ 				else
+ 					printf("Port %d Link Down\n",
+ 						(uint8_t)portid);
+@@ -2074,28 +2046,47 @@ static int check_ptype(uint16_t portid)
+ static int
+ init_power_library(void)
+ {
+-	int ret = 0, lcore_id;
+-	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
+-		if (rte_lcore_is_enabled(lcore_id)) {
+-			/* init power management library */
+-			ret = rte_power_init(lcore_id);
+-			if (ret)
+-				RTE_LOG(ERR, POWER,
++	unsigned int lcore_id;
++	int ret = 0;
++
++	RTE_LCORE_FOREACH(lcore_id) {
++		/* init power management library */
++		ret = rte_power_init(lcore_id);
++		if (ret) {
++			RTE_LOG(ERR, POWER,
+ 				"Library initialization failed on core %u\n",
+ 				lcore_id);
++			return ret;
+ 		}
+ 	}
+ 	return ret;
+ }
++
++static int
++deinit_power_library(void)
++{
++	unsigned int lcore_id;
++	int ret = 0;
++
++	RTE_LCORE_FOREACH(lcore_id) {
++		/* deinit power management library */
++		ret = rte_power_exit(lcore_id);
++		if (ret) {
++			RTE_LOG(ERR, POWER,
++				"Library deinitialization failed on core %u\n",
++				lcore_id);
++			return ret;
++		}
++	}
++	return ret;
++}
++
+ static void
+-update_telemetry(__attribute__((unused)) struct rte_timer *tim,
+-		__attribute__((unused)) void *arg)
++get_current_stat_values(uint64_t *values)
+ {
+ 	unsigned int lcore_id = rte_lcore_id();
+ 	struct lcore_conf *qconf;
+ 	uint64_t app_eps = 0, app_fps = 0, app_br = 0;
+-	uint64_t values[3] = {0};
+-	int ret;
+ 	uint64_t count = 0;
+ 
+ 	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
+@@ -2114,17 +2105,41 @@ update_telemetry(__attribute__((unused)) struct rte_timer *tim,
+ 		values[0] = app_eps/count;
+ 		values[1] = app_fps/count;
+ 		values[2] = app_br/count;
+-	} else {
+-		values[0] = 0;
+-		values[1] = 0;
+-		values[2] = 0;
+-	}
++	} else
++		memset(values, 0, sizeof(uint64_t) * NUM_TELSTATS);
++
++}
+ 
++static void
++update_telemetry(__rte_unused struct rte_timer *tim,
++		__rte_unused void *arg)
++{
++	int ret;
++	uint64_t values[NUM_TELSTATS] = {0};
++
++	get_current_stat_values(values);
+ 	ret = rte_metrics_update_values(RTE_METRICS_GLOBAL, telstats_index,
+ 					values, RTE_DIM(values));
+ 	if (ret < 0)
+ 		RTE_LOG(WARNING, POWER, "failed to update metrcis\n");
+ }
++
++static int
++handle_app_stats(const char *cmd __rte_unused,
++		const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	uint64_t values[NUM_TELSTATS] = {0};
++	uint32_t i;
++
++	rte_tel_data_start_dict(d);
++	get_current_stat_values(values);
++	for (i = 0; i < NUM_TELSTATS; i++)
++		rte_tel_data_add_dict_u64(d, telstats_strings[i].name,
++				values[i]);
++	return 0;
++}
++
+ static void
+ telemetry_setup_timer(void)
+ {
+@@ -2212,8 +2227,7 @@ main(int argc, char **argv)
+ 	uint32_t dev_rxq_num, dev_txq_num;
+ 	uint8_t nb_rx_queue, queue, socketid;
+ 	uint16_t portid;
+-	uint8_t num_telstats = RTE_DIM(telstats_strings);
+-	const char *ptr_strings[num_telstats];
++	const char *ptr_strings[NUM_TELSTATS];
+ 
+ 	/* catch SIGINT and restore cpufreq governor to ondemand */
+ 	signal(SIGINT, signal_exit_now);
+@@ -2233,8 +2247,8 @@ main(int argc, char **argv)
+ 	if (ret < 0)
+ 		rte_exit(EXIT_FAILURE, "Invalid L3FWD parameters\n");
+ 
+-	if (init_power_library())
+-		RTE_LOG(ERR, L3FWD_POWER, "init_power_library failed\n");
++	if (app_mode != APP_MODE_TELEMETRY && init_power_library())
++		rte_exit(EXIT_FAILURE, "init_power_library failed\n");
+ 
+ 	if (update_lcore_params() < 0)
+ 		rte_exit(EXIT_FAILURE, "update_lcore_params failed\n");
+@@ -2512,10 +2526,10 @@ main(int argc, char **argv)
+ 		/* Init metrics library */
+ 		rte_metrics_init(rte_socket_id());
+ 		/** Register stats with metrics library */
+-		for (i = 0; i < num_telstats; i++)
++		for (i = 0; i < NUM_TELSTATS; i++)
+ 			ptr_strings[i] = telstats_strings[i].name;
+ 
+-		ret = rte_metrics_reg_names(ptr_strings, num_telstats);
++		ret = rte_metrics_reg_names(ptr_strings, NUM_TELSTATS);
+ 		if (ret >= 0)
+ 			telstats_index = ret;
+ 		else
+@@ -2525,6 +2539,9 @@ main(int argc, char **argv)
+ 			rte_spinlock_init(&stats[lcore_id].telemetry_lock);
+ 		}
+ 		rte_timer_init(&telemetry_timer);
++		rte_telemetry_register_cmd("/l3fwd-power/stats",
++				handle_app_stats,
++				"Returns global power stats. Parameters: None");
+ 		rte_eal_mp_remote_launch(main_telemetry_loop, NULL,
+ 						SKIP_MASTER);
+ 	}
+@@ -2537,8 +2554,23 @@ main(int argc, char **argv)
+ 			return -1;
+ 	}
+ 
++	RTE_ETH_FOREACH_DEV(portid)
++	{
++		if ((enabled_port_mask & (1 << portid)) == 0)
++			continue;
++
++		rte_eth_dev_stop(portid);
++		rte_eth_dev_close(portid);
++	}
++
+ 	if (app_mode == APP_MODE_EMPTY_POLL)
+ 		rte_power_empty_poll_stat_free();
+ 
++	if (app_mode != APP_MODE_TELEMETRY && deinit_power_library())
++		rte_exit(EXIT_FAILURE, "deinit_power_library failed\n");
++
++	if (rte_eal_cleanup() < 0)
++		RTE_LOG(ERR, L3FWD_POWER, "EAL cleanup failed\n");
++
+ 	return 0;
+ }
+diff --git a/examples/l3fwd-power/meson.build b/examples/l3fwd-power/meson.build
+index d5a3d4b..4cd6947 100644
+--- a/examples/l3fwd-power/meson.build
++++ b/examples/l3fwd-power/meson.build
+@@ -12,7 +12,7 @@ if not dpdk_conf.has('RTE_LIBRTE_POWER')
+ endif
+ 
+ allow_experimental_apis = true
+-deps += ['power', 'timer', 'lpm', 'hash', 'metrics']
++deps += ['power', 'timer', 'lpm', 'hash', 'metrics', 'telemetry']
+ sources = files(
+ 	'main.c', 'perf_core.c'
+ )
+diff --git a/kernel/linux/kni/compat.h b/kernel/linux/kni/compat.h
+index 7109474..9ee45db 100644
+--- a/kernel/linux/kni/compat.h
++++ b/kernel/linux/kni/compat.h
+@@ -130,3 +130,7 @@
+ #if KERNEL_VERSION(4, 10, 0) <= LINUX_VERSION_CODE
+ #define HAVE_IOVA_TO_KVA_MAPPING_SUPPORT
+ #endif
++
++#if KERNEL_VERSION(5, 6, 0) <= LINUX_VERSION_CODE
++#define HAVE_TX_TIMEOUT_TXQUEUE
++#endif
+diff --git a/kernel/linux/kni/kni_net.c b/kernel/linux/kni/kni_net.c
+index 1ba9b1b..166a667 100644
+--- a/kernel/linux/kni/kni_net.c
++++ b/kernel/linux/kni/kni_net.c
+@@ -623,8 +623,13 @@ kni_net_rx(struct kni_dev *kni)
+ /*
+  * Deal with a transmit timeout.
+  */
++#ifdef HAVE_TX_TIMEOUT_TXQUEUE
++static void
++kni_net_tx_timeout(struct net_device *dev, unsigned int txqueue)
++#else
+ static void
+ kni_net_tx_timeout(struct net_device *dev)
++#endif
+ {
+ 	pr_debug("Transmit timeout at %ld, latency %ld\n", jiffies,
+ 			jiffies - dev_trans_start(dev));
+diff --git a/lib/Makefile b/lib/Makefile
+index 46b91ae..4b1d3a0 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -4,8 +4,9 @@
+ include $(RTE_SDK)/mk/rte.vars.mk
+ 
+ DIRS-$(CONFIG_RTE_LIBRTE_KVARGS) += librte_kvargs
++DIRS-y += librte_telemetry
+ DIRS-$(CONFIG_RTE_LIBRTE_EAL) += librte_eal
+-DEPDIRS-librte_eal := librte_kvargs
++DEPDIRS-librte_eal := librte_kvargs librte_telemetry
+ DIRS-$(CONFIG_RTE_LIBRTE_PCI) += librte_pci
+ DEPDIRS-librte_pci := librte_eal
+ DIRS-$(CONFIG_RTE_LIBRTE_RING) += librte_ring
+@@ -71,7 +72,10 @@ DEPDIRS-librte_gro := librte_eal librte_mbuf librte_ethdev librte_net
+ DIRS-$(CONFIG_RTE_LIBRTE_JOBSTATS) += librte_jobstats
+ DEPDIRS-librte_jobstats := librte_eal
+ DIRS-$(CONFIG_RTE_LIBRTE_METRICS) += librte_metrics
+-DEPDIRS-librte_metrics := librte_eal
++DEPDIRS-librte_metrics := librte_eal librte_ethdev
++ifeq ($(CONFIG_RTE_LIBRTE_TELEMETRY),y)
++DEPDIRS-librte_metrics += librte_telemetry
++endif
+ DIRS-$(CONFIG_RTE_LIBRTE_BITRATE) += librte_bitratestats
+ DEPDIRS-librte_bitratestats := librte_eal librte_metrics librte_ethdev
+ DIRS-$(CONFIG_RTE_LIBRTE_LATENCY_STATS) += librte_latencystats
+@@ -113,11 +117,9 @@ DIRS-$(CONFIG_RTE_LIBRTE_BPF) += librte_bpf
+ DEPDIRS-librte_bpf := librte_eal librte_mempool librte_mbuf librte_ethdev
+ DIRS-$(CONFIG_RTE_LIBRTE_IPSEC) += librte_ipsec
+ DEPDIRS-librte_ipsec := librte_eal librte_mbuf librte_cryptodev librte_security \
+-			librte_net
+-DIRS-$(CONFIG_RTE_LIBRTE_TELEMETRY) += librte_telemetry
+-DEPDIRS-librte_telemetry := librte_eal librte_metrics librte_ethdev
++			librte_net librte_hash
+ DIRS-$(CONFIG_RTE_LIBRTE_RCU) += librte_rcu
+-DEPDIRS-librte_rcu := librte_eal
++DEPDIRS-librte_rcu := librte_eal librte_ring
+ 
+ ifeq ($(CONFIG_RTE_EXEC_ENV_LINUX),y)
+ DIRS-$(CONFIG_RTE_LIBRTE_KNI) += librte_kni
+diff --git a/lib/librte_eal/common/eal_common_options.c b/lib/librte_eal/common/eal_common_options.c
+index a7f9c5f..93419ff 100644
+--- a/lib/librte_eal/common/eal_common_options.c
++++ b/lib/librte_eal/common/eal_common_options.c
+@@ -25,6 +25,7 @@
+ #include <rte_version.h>
+ #include <rte_devargs.h>
+ #include <rte_memcpy.h>
++#include <rte_telemetry.h>
+ 
+ #include "eal_internal_cfg.h"
+ #include "eal_options.h"
+@@ -82,6 +83,8 @@ eal_long_options[] = {
+ 	{OPT_LEGACY_MEM,        0, NULL, OPT_LEGACY_MEM_NUM       },
+ 	{OPT_SINGLE_FILE_SEGMENTS, 0, NULL, OPT_SINGLE_FILE_SEGMENTS_NUM},
+ 	{OPT_MATCH_ALLOCATIONS, 0, NULL, OPT_MATCH_ALLOCATIONS_NUM},
++	{OPT_TELEMETRY,         0, NULL, OPT_TELEMETRY_NUM        },
++	{OPT_NO_TELEMETRY,      0, NULL, OPT_NO_TELEMETRY_NUM     },
+ 	{0,                     0, NULL, 0                        }
+ };
+ 
+@@ -107,7 +110,7 @@ static const char *default_solib_dir = RTE_EAL_PMD_PATH;
+  * Note: PLEASE DO NOT ALTER THIS without making a corresponding
+  * change to usertools/dpdk-pmdinfo.py
+  */
+-static const char dpdk_solib_path[] __attribute__((used)) =
++static const char dpdk_solib_path[] __rte_used =
+ "DPDK_PLUGIN_PATH=" RTE_EAL_PMD_PATH;
+ 
+ TAILQ_HEAD(device_option_list, device_option);
+@@ -126,6 +129,74 @@ static int master_lcore_parsed;
+ static int mem_parsed;
+ static int core_parsed;
+ 
++static char **eal_args;
++static char **eal_app_args;
++
++#define EAL_PARAM_REQ "/eal/params"
++#define EAL_APP_PARAM_REQ "/eal/app_params"
++
++/* callback handler for telemetry library to report out EAL flags */
++int
++handle_eal_info_request(const char *cmd, const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	char **args;
++	int used = 0;
++	int i = 0;
++
++	if (strcmp(cmd, EAL_PARAM_REQ) == 0)
++		args = eal_args;
++	else
++		args = eal_app_args;
++
++	rte_tel_data_start_array(d, RTE_TEL_STRING_VAL);
++	if (args == NULL || args[0] == NULL)
++		return 0;
++
++	for ( ; args[i] != NULL; i++)
++		used = rte_tel_data_add_array_string(d, args[i]);
++	return used;
++}
++
++int
++eal_save_args(int argc, char **argv)
++{
++	int i, j;
++
++	rte_telemetry_register_cmd(EAL_PARAM_REQ, handle_eal_info_request,
++			"Returns EAL commandline parameters used. Takes no parameters");
++	rte_telemetry_register_cmd(EAL_APP_PARAM_REQ, handle_eal_info_request,
++			"Returns app commandline parameters used. Takes no parameters");
++
++	/* clone argv to report out later. We overprovision, but
++	 * this does not waste huge amounts of memory
++	 */
++	eal_args = calloc(argc + 1, sizeof(*eal_args));
++	if (eal_args == NULL)
++		return -1;
++
++	for (i = 0; i < argc; i++) {
++		eal_args[i] = strdup(argv[i]);
++		if (strcmp(argv[i], "--") == 0)
++			break;
++	}
++	eal_args[i++] = NULL; /* always finish with NULL */
++
++	/* allow reporting of any app args we know about too */
++	if (i >= argc)
++		return 0;
++
++	eal_app_args = calloc(argc - i + 1, sizeof(*eal_args));
++	if (eal_app_args == NULL)
++		return -1;
++
++	for (j = 0; i < argc; j++, i++)
++		eal_app_args[j] = strdup(argv[i]);
++	eal_app_args[j] = NULL;
++
++	return 0;
++}
++
+ static int
+ eal_option_device_add(enum rte_devtype type, const char *optarg)
+ {
+@@ -1446,6 +1517,11 @@ eal_parse_common_option(int opt, const char *optarg,
+ 			return -1;
+ 		}
+ 		break;
++	case OPT_TELEMETRY_NUM:
++		break;
++	case OPT_NO_TELEMETRY_NUM:
++		conf->no_telemetry = 1;
++		break;
+ 
+ 	/* don't know what to do, leave this to caller */
+ 	default:
+@@ -1687,6 +1763,8 @@ eal_common_usage(void)
+ 	       "  --"OPT_IN_MEMORY"   Operate entirely in memory. This will\n"
+ 	       "                      disable secondary process support\n"
+ 	       "  --"OPT_BASE_VIRTADDR"     Base virtual address\n"
++	       "  --"OPT_TELEMETRY"   Enable telemetry support (on by default)\n"
++	       "  --"OPT_NO_TELEMETRY"   Disable telemetry support\n"
+ 	       "\nEAL options for DEBUG use only:\n"
+ 	       "  --"OPT_HUGE_UNLINK"       Unlink hugepage files after init\n"
+ 	       "  --"OPT_NO_HUGE"           Use malloc instead of hugetlbfs\n"
+diff --git a/lib/librte_eal/common/eal_internal_cfg.h b/lib/librte_eal/common/eal_internal_cfg.h
+index a42f349..c650bc0 100644
+--- a/lib/librte_eal/common/eal_internal_cfg.h
++++ b/lib/librte_eal/common/eal_internal_cfg.h
+@@ -82,6 +82,7 @@ struct internal_config {
+ 	rte_cpuset_t ctrl_cpuset;         /**< cpuset for ctrl threads */
+ 	volatile unsigned int init_complete;
+ 	/**< indicates whether EAL has completed initialization */
++	unsigned int no_telemetry; /**< true to disable Telemetry */
+ };
+ extern struct internal_config internal_config; /**< Global EAL configuration. */
+ 
+diff --git a/lib/librte_eal/common/eal_options.h b/lib/librte_eal/common/eal_options.h
+index 9855429..965e24f 100644
+--- a/lib/librte_eal/common/eal_options.h
++++ b/lib/librte_eal/common/eal_options.h
+@@ -7,6 +7,8 @@
+ 
+ #include "getopt.h"
+ 
++struct rte_tel_data;
++
+ enum {
+ 	/* long options mapped to a short option */
+ #define OPT_HELP              "help"
+@@ -69,6 +71,10 @@ enum {
+ 	OPT_IOVA_MODE_NUM,
+ #define OPT_MATCH_ALLOCATIONS  "match-allocations"
+ 	OPT_MATCH_ALLOCATIONS_NUM,
++#define OPT_TELEMETRY         "telemetry"
++	OPT_TELEMETRY_NUM,
++#define OPT_NO_TELEMETRY      "no-telemetry"
++	OPT_NO_TELEMETRY_NUM,
+ 	OPT_LONG_MAX_NUM
+ };
+ 
+@@ -84,5 +90,8 @@ int eal_check_common_options(struct internal_config *internal_cfg);
+ void eal_common_usage(void);
+ enum rte_proc_type_t eal_proc_type_detect(void);
+ int eal_plugins_init(void);
++int eal_save_args(int argc, char **argv);
++int handle_eal_info_request(const char *cmd, const char *params __rte_unused,
++		struct rte_tel_data *d);
+ 
+ #endif /* EAL_OPTIONS_H */
+diff --git a/lib/librte_eal/common/include/rte_common.h b/lib/librte_eal/common/include/rte_common.h
+index 459d082..bac96aa 100644
+--- a/lib/librte_eal/common/include/rte_common.h
++++ b/lib/librte_eal/common/include/rte_common.h
+@@ -42,8 +42,23 @@ extern "C" {
+ #define RTE_STD_C11
+ #endif
+ 
+-/** Define GCC_VERSION **/
+-#ifdef RTE_TOOLCHAIN_GCC
++/*
++ * RTE_TOOLCHAIN_GCC is defined if the target is built with GCC,
++ * while a host application (like pmdinfogen) may have another compiler.
++ * RTE_CC_IS_GNU is true if the file is compiled with GCC,
++ * no matter it is a target or host application.
++ */
++#define RTE_CC_IS_GNU 0
++#if defined __clang__
++#define RTE_CC_CLANG
++#elif defined __INTEL_COMPILER
++#define RTE_CC_ICC
++#elif defined __GNUC__
++#define RTE_CC_GCC
++#undef RTE_CC_IS_GNU
++#define RTE_CC_IS_GNU 1
++#endif
++#if RTE_CC_IS_GNU
+ #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 +	\
+ 		__GNUC_PATCHLEVEL__)
+ #endif
+@@ -76,6 +91,11 @@ typedef uint16_t unaligned_uint16_t;
+  */
+ #define __rte_weak __attribute__((__weak__))
+ 
++/**
++ * Force symbol to be generated even if it appears to be unused.
++ */
++#define __rte_used __attribute__((used))
++
+ /*********** Macros to eliminate unused variable warnings ********/
+ 
+ /**
+@@ -89,6 +109,21 @@ typedef uint16_t unaligned_uint16_t;
+  */
+ #define RTE_SET_USED(x) (void)(x)
+ 
++/**
++ * Check format string and its arguments at compile-time.
++ *
++ * GCC on Windows assumes MS-specific format string by default,
++ * even if the underlying stdio implementation is ANSI-compliant,
++ * so this must be overridden.
++ */
++#if RTE_CC_IS_GNU
++#define __rte_format_printf(format_index, first_arg) \
++	__attribute__((format(gnu_printf, format_index, first_arg)))
++#else
++#define __rte_format_printf(format_index, first_arg) \
++	__attribute__((format(printf, format_index, first_arg)))
++#endif
++
+ #define RTE_PRIORITY_LOG 101
+ #define RTE_PRIORITY_BUS 110
+ #define RTE_PRIORITY_CLASS 120
+diff --git a/lib/librte_eal/freebsd/eal/Makefile b/lib/librte_eal/freebsd/eal/Makefile
+index b160b57..cf31cd1 100644
+--- a/lib/librte_eal/freebsd/eal/Makefile
++++ b/lib/librte_eal/freebsd/eal/Makefile
+@@ -19,6 +19,7 @@ LDLIBS += -lexecinfo
+ LDLIBS += -lpthread
+ LDLIBS += -lgcc_s
+ LDLIBS += -lrte_kvargs
++LDLIBS += -lrte_telemetry
+ 
+ EXPORT_MAP := ../../rte_eal_version.map
+ 
+diff --git a/lib/librte_eal/freebsd/eal/eal.c b/lib/librte_eal/freebsd/eal/eal.c
+index 6ae37e7..a5dc8dc 100644
+--- a/lib/librte_eal/freebsd/eal/eal.c
++++ b/lib/librte_eal/freebsd/eal/eal.c
+@@ -44,6 +44,7 @@
+ #include <rte_option.h>
+ #include <rte_atomic.h>
+ #include <malloc_heap.h>
++#include <rte_telemetry.h>
+ 
+ #include "eal_private.h"
+ #include "eal_thread.h"
+@@ -724,6 +725,9 @@ rte_eal_init(int argc, char **argv)
+ 
+ 	eal_reset_internal_config(&internal_config);
+ 
++	/* clone argv to report out later in telemetry */
++	eal_save_args(argc, argv);
++
+ 	/* set log level as early as possible */
+ 	eal_log_level_parse(argc, argv);
+ 
+@@ -952,6 +956,15 @@ rte_eal_init(int argc, char **argv)
+ 		rte_eal_init_alert("Cannot clear runtime directory\n");
+ 		return -1;
+ 	}
++	if (!internal_config.no_telemetry) {
++		const char *error_str;
++		if (rte_telemetry_init(rte_eal_get_runtime_dir(),
++				&internal_config.ctrl_cpuset, &error_str)
++				!= 0) {
++			rte_eal_init_alert(error_str);
++			return -1;
++		}
++	}
+ 
+ 	eal_mcfg_complete();
+ 
+diff --git a/lib/librte_eal/freebsd/eal/meson.build b/lib/librte_eal/freebsd/eal/meson.build
+index 1426f7e..9960837 100644
+--- a/lib/librte_eal/freebsd/eal/meson.build
++++ b/lib/librte_eal/freebsd/eal/meson.build
+@@ -19,4 +19,4 @@ env_sources = files('eal_alarm.c',
+ 		'eal_dev.c'
+ )
+ 
+-deps += ['kvargs']
++deps += ['kvargs', 'telemetry']
+diff --git a/lib/librte_eal/linux/eal/Makefile b/lib/librte_eal/linux/eal/Makefile
+index e70cf10..570e922 100644
+--- a/lib/librte_eal/linux/eal/Makefile
++++ b/lib/librte_eal/linux/eal/Makefile
+@@ -23,6 +23,7 @@ LDLIBS += -lpthread
+ LDLIBS += -lgcc_s
+ LDLIBS += -lrt
+ LDLIBS += -lrte_kvargs
++LDLIBS += -lrte_telemetry
+ ifeq ($(CONFIG_RTE_EAL_NUMA_AWARE_HUGEPAGES),y)
+ LDLIBS += -lnuma
+ endif
+diff --git a/lib/librte_eal/linux/eal/eal.c b/lib/librte_eal/linux/eal/eal.c
+index c4233ec..8b2aea4 100644
+--- a/lib/librte_eal/linux/eal/eal.c
++++ b/lib/librte_eal/linux/eal/eal.c
+@@ -25,6 +25,7 @@
+ #if defined(RTE_ARCH_X86)
+ #include <sys/io.h>
+ #endif
++#include <linux/version.h>
+ 
+ #include <rte_compat.h>
+ #include <rte_common.h>
+@@ -50,6 +51,7 @@
+ #include <malloc_heap.h>
+ #include <rte_vfio.h>
+ #include <rte_option.h>
++#include <rte_telemetry.h>
+ 
+ #include "eal_private.h"
+ #include "eal_thread.h"
+@@ -990,6 +992,9 @@ rte_eal_init(int argc, char **argv)
+ 	/* set log level as early as possible */
+ 	eal_log_level_parse(argc, argv);
+ 
++	/* clone argv to report out later in telemetry */
++	eal_save_args(argc, argv);
++
+ 	if (rte_eal_cpu_init() < 0) {
+ 		rte_eal_init_alert("Cannot detect lcores.");
+ 		rte_errno = ENOTSUP;
+@@ -1290,6 +1295,17 @@ rte_eal_init(int argc, char **argv)
+ 		rte_eal_init_alert("Cannot clear runtime directory\n");
+ 		return -1;
+ 	}
++	if (!internal_config.no_telemetry) {
++		const char *error_str = NULL;
++		if (rte_telemetry_init(rte_eal_get_runtime_dir(),
++				&internal_config.ctrl_cpuset, &error_str)
++				!= 0) {
++			rte_eal_init_alert(error_str);
++			return -1;
++		}
++		if (error_str != NULL)
++			RTE_LOG(NOTICE, EAL, "%s\n", error_str);
++	}
+ 
+ 	eal_mcfg_complete();
+ 
+diff --git a/lib/librte_eal/linux/eal/meson.build b/lib/librte_eal/linux/eal/meson.build
+index b02b069..67ef2fc 100644
+--- a/lib/librte_eal/linux/eal/meson.build
++++ b/lib/librte_eal/linux/eal/meson.build
+@@ -25,7 +25,7 @@ env_sources = files('eal_alarm.c',
+ 		'eal_dev.c',
+ )
+ 
+-deps += ['kvargs']
++deps += ['kvargs', 'telemetry']
+ if has_libnuma == 1
+ 	dpdk_conf.set10('RTE_EAL_NUMA_AWARE_HUGEPAGES', true)
+ endif
+diff --git a/lib/librte_ethdev/rte_ethdev.c b/lib/librte_ethdev/rte_ethdev.c
+index 6e9cb24..49b7af8 100644
+--- a/lib/librte_ethdev/rte_ethdev.c
++++ b/lib/librte_ethdev/rte_ethdev.c
+@@ -38,6 +38,7 @@
+ #include <rte_kvargs.h>
+ #include <rte_class.h>
+ #include <rte_ether.h>
++#include <rte_telemetry.h>
+ 
+ #include "rte_ethdev.h"
+ #include "rte_ethdev_driver.h"
+@@ -5190,9 +5191,109 @@ rte_eth_devargs_parse(const char *dargs, struct rte_eth_devargs *eth_da)
+ 	return result;
+ }
+ 
++static int
++handle_port_list(const char *cmd __rte_unused,
++		const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	int port_id;
++
++	rte_tel_data_start_array(d, RTE_TEL_INT_VAL);
++	RTE_ETH_FOREACH_DEV(port_id)
++		rte_tel_data_add_array_int(d, port_id);
++	return 0;
++}
++
++static int
++handle_port_xstats(const char *cmd __rte_unused,
++		const char *params,
++		struct rte_tel_data *d)
++{
++	struct rte_eth_xstat *eth_xstats;
++	struct rte_eth_xstat_name *xstat_names;
++	int port_id, num_xstats;
++	int i, ret;
++
++	if (params == NULL || strlen(params) == 0 || !isdigit(*params))
++		return -1;
++
++	port_id = atoi(params);
++	if (!rte_eth_dev_is_valid_port(port_id))
++		return -1;
++
++	num_xstats = rte_eth_xstats_get(port_id, NULL, 0);
++	if (num_xstats < 0)
++		return -1;
++
++	/* use one malloc for both names and stats */
++	eth_xstats = malloc((sizeof(struct rte_eth_xstat) +
++			sizeof(struct rte_eth_xstat_name)) * num_xstats);
++	if (eth_xstats == NULL)
++		return -1;
++	xstat_names = (void *)&eth_xstats[num_xstats];
++
++	ret = rte_eth_xstats_get_names(port_id, xstat_names, num_xstats);
++	if (ret < 0 || ret > num_xstats) {
++		free(eth_xstats);
++		return -1;
++	}
++
++	ret = rte_eth_xstats_get(port_id, eth_xstats, num_xstats);
++	if (ret < 0 || ret > num_xstats) {
++		free(eth_xstats);
++		return -1;
++	}
++
++	rte_tel_data_start_dict(d);
++	for (i = 0; i < num_xstats; i++)
++		rte_tel_data_add_dict_u64(d, xstat_names[i].name,
++				eth_xstats[i].value);
++	return 0;
++}
++
++static int
++handle_port_link_status(const char *cmd __rte_unused,
++		const char *params,
++		struct rte_tel_data *d)
++{
++	static const char *status_str = "status";
++	int ret, port_id;
++	struct rte_eth_link link;
++
++	if (params == NULL || strlen(params) == 0 || !isdigit(*params))
++		return -1;
++
++	port_id = atoi(params);
++	if (!rte_eth_dev_is_valid_port(port_id))
++		return -1;
++
++	ret = rte_eth_link_get(port_id, &link);
++	if (ret < 0)
++		return -1;
++
++	rte_tel_data_start_dict(d);
++	if (!link.link_status) {
++		rte_tel_data_add_dict_string(d, status_str, "DOWN");
++		return 0;
++	}
++	rte_tel_data_add_dict_string(d, status_str, "UP");
++	rte_tel_data_add_dict_u64(d, "speed", link.link_speed);
++	rte_tel_data_add_dict_string(d, "duplex",
++			(link.link_duplex == ETH_LINK_FULL_DUPLEX) ?
++				"full-duplex" : "half-duplex");
++	return 0;
++}
++
+ RTE_INIT(ethdev_init_log)
+ {
+ 	rte_eth_dev_logtype = rte_log_register("lib.ethdev");
+ 	if (rte_eth_dev_logtype >= 0)
+ 		rte_log_set_level(rte_eth_dev_logtype, RTE_LOG_INFO);
++	rte_telemetry_register_cmd("/ethdev/list", handle_port_list,
++			"Returns list of available ethdev ports. Takes no parameters");
++	rte_telemetry_register_cmd("/ethdev/xstats", handle_port_xstats,
++			"Returns the extended stats for a port. Parameters: int port_id");
++	rte_telemetry_register_cmd("/ethdev/link_status",
++			handle_port_link_status,
++			"Returns the link status for a port. Parameters: int port_id");
+ }
+diff --git a/lib/librte_metrics/Makefile b/lib/librte_metrics/Makefile
+index 6b385f5..1264d3b 100644
+--- a/lib/librte_metrics/Makefile
++++ b/lib/librte_metrics/Makefile
+@@ -14,6 +14,16 @@ EXPORT_MAP := rte_metrics_version.map
+ # all source are stored in SRCS-y
+ SRCS-$(CONFIG_RTE_LIBRTE_METRICS) := rte_metrics.c
+ 
++ifeq ($(CONFIG_RTE_LIBRTE_TELEMETRY),y)
++SRCS-y += rte_metrics_telemetry.c
++SYMLINK-$(CONFIG_RTE_LIBRTE_METRICS)-include += rte_metrics_telemetry.h
++
++LDLIBS += -lrte_ethdev -lrte_telemetry
++LDLIBS += -ljansson
++
++CFLAGS += -I$(RTE_SDK)/lib/librte_telemetry/
++endif
++
+ # Install header file
+ SYMLINK-$(CONFIG_RTE_LIBRTE_METRICS)-include += rte_metrics.h
+ 
+diff --git a/lib/librte_metrics/meson.build b/lib/librte_metrics/meson.build
+index e26d1f4..27ccbd6 100644
+--- a/lib/librte_metrics/meson.build
++++ b/lib/librte_metrics/meson.build
+@@ -3,3 +3,12 @@
+ 
+ sources = files('rte_metrics.c')
+ headers = files('rte_metrics.h')
++
++jansson = dependency('jansson', required: false)
++if jansson.found()
++	ext_deps += jansson
++	sources += files('rte_metrics_telemetry.c')
++	headers = files('rte_metrics_telemetry.h')
++	deps += ['ethdev', 'telemetry']
++	includes += include_directories('../librte_telemetry')
++endif
+diff --git a/lib/librte_metrics/rte_metrics.c b/lib/librte_metrics/rte_metrics.c
+index df5e32c..e2a0fbe 100644
+--- a/lib/librte_metrics/rte_metrics.c
++++ b/lib/librte_metrics/rte_metrics.c
+@@ -13,7 +13,8 @@
+ #include <rte_memzone.h>
+ #include <rte_spinlock.h>
+ 
+-#define RTE_METRICS_MAX_METRICS 256
++int metrics_initialized;
++
+ #define RTE_METRICS_MEMZONE_NAME "RTE_METRICS"
+ 
+ /**
+@@ -61,6 +62,8 @@ rte_metrics_init(int socket_id)
+ 	struct rte_metrics_data_s *stats;
+ 	const struct rte_memzone *memzone;
+ 
++	if (metrics_initialized)
++		return;
+ 	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
+ 		return;
+ 
+@@ -74,6 +77,7 @@ rte_metrics_init(int socket_id)
+ 	stats = memzone->addr;
+ 	memset(stats, 0, sizeof(struct rte_metrics_data_s));
+ 	rte_spinlock_init(&stats->lock);
++	metrics_initialized = 1;
+ }
+ 
+ int
+@@ -81,6 +85,7 @@ rte_metrics_deinit(void)
+ {
+ 	struct rte_metrics_data_s *stats;
+ 	const struct rte_memzone *memzone;
++	int ret;
+ 
+ 	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
+ 		return -EINVAL;
+@@ -92,8 +97,10 @@ rte_metrics_deinit(void)
+ 	stats = memzone->addr;
+ 	memset(stats, 0, sizeof(struct rte_metrics_data_s));
+ 
+-	return rte_memzone_free(memzone);
+-
++	ret = rte_memzone_free(memzone);
++	if (ret == 0)
++		metrics_initialized = 0;
++	return ret;
+ }
+ 
+ int
+diff --git a/lib/librte_metrics/rte_metrics.h b/lib/librte_metrics/rte_metrics.h
+index 77bffe0..fbe64dd 100644
+--- a/lib/librte_metrics/rte_metrics.h
++++ b/lib/librte_metrics/rte_metrics.h
+@@ -30,8 +30,11 @@
+ extern "C" {
+ #endif
+ 
++extern int metrics_initialized;
++
+ /** Maximum length of metric name (including null-terminator) */
+ #define RTE_METRICS_MAX_NAME_LEN 64
++#define RTE_METRICS_MAX_METRICS 256
+ 
+ /**
+  * Global metric special id.
+@@ -43,7 +46,6 @@ extern "C" {
+  */
+ #define RTE_METRICS_GLOBAL -1
+ 
+-
+ /**
+  * A name-key lookup for metrics.
+  *
+@@ -71,7 +73,6 @@ struct rte_metric_value {
+ 	uint64_t value;
+ };
+ 
+-
+ /**
+  * Initializes metric module. This function must be called from
+  * a primary process before metrics are used.
+diff --git a/lib/librte_metrics/rte_metrics_telemetry.c b/lib/librte_metrics/rte_metrics_telemetry.c
+new file mode 100644
+index 0000000..040e87d
+--- /dev/null
++++ b/lib/librte_metrics/rte_metrics_telemetry.c
+@@ -0,0 +1,541 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#include <jansson.h>
++
++#include <rte_ethdev.h>
++#include <rte_string_fns.h>
++#ifdef RTE_LIBRTE_TELEMETRY
++#include <rte_telemetry_legacy.h>
++#endif
++
++#include "rte_metrics.h"
++#include "rte_metrics_telemetry.h"
++
++int metrics_log_level;
++
++/* Logging Macros */
++#define METRICS_LOG(level, fmt, args...) \
++	rte_log(RTE_LOG_ ##level, metrics_log_level, "%s(): "fmt "\n", \
++		__func__, ##args)
++
++#define METRICS_LOG_ERR(fmt, args...) \
++	METRICS_LOG(ERR, fmt, ## args)
++
++#define METRICS_LOG_WARN(fmt, args...) \
++	METRICS_LOG(WARNING, fmt, ## args)
++
++static int32_t
++rte_metrics_tel_reg_port_ethdev_to_metrics(uint16_t port_id)
++{
++	int ret,  num_xstats, i;
++	struct rte_eth_xstat_name *eth_xstats_names;
++	const char **xstats_names;
++
++	num_xstats = rte_eth_xstats_get(port_id, NULL, 0);
++	if (num_xstats < 0) {
++		METRICS_LOG_ERR("rte_eth_xstats_get(%u) failed: %d",
++				port_id, num_xstats);
++		return -EPERM;
++	}
++
++	xstats_names = malloc(sizeof(*xstats_names) * num_xstats);
++	eth_xstats_names = malloc(sizeof(struct rte_eth_xstat_name)
++			* num_xstats);
++	if (eth_xstats_names == NULL || xstats_names == NULL) {
++		METRICS_LOG_ERR("Failed to malloc memory for xstats_names");
++		ret = -ENOMEM;
++		goto free_xstats;
++	}
++
++	if (rte_eth_xstats_get_names(port_id,
++			eth_xstats_names, num_xstats) != num_xstats) {
++		METRICS_LOG_ERR("rte_eth_xstats_get_names(%u) len %d failed",
++				port_id, num_xstats);
++		ret = -EPERM;
++		goto free_xstats;
++	}
++
++	for (i = 0; i < num_xstats; i++)
++		xstats_names[i] = eth_xstats_names[i].name;
++	ret = rte_metrics_reg_names(xstats_names, num_xstats);
++	if (ret < 0)
++		METRICS_LOG_ERR("rte_metrics_reg_names failed - metrics may already be registered");
++
++free_xstats:
++	free(eth_xstats_names);
++	free(xstats_names);
++	return ret;
++}
++
++int32_t
++rte_metrics_tel_reg_all_ethdev(int *metrics_register_done, int *reg_index_list)
++{
++	struct driver_index {
++		const void *dev_ops;
++		int reg_index;
++	} drv_idx[RTE_MAX_ETHPORTS] = { {0} };
++	int ret, nb_drv_idx = 0;
++	uint16_t d;
++
++	rte_metrics_init(rte_socket_id());
++	RTE_ETH_FOREACH_DEV(d) {
++		int i;
++		/* Different device types have different numbers of stats, so
++		 * first check if the stats for this type of device have
++		 * already been registered
++		 */
++		for (i = 0; i < nb_drv_idx; i++) {
++			if (rte_eth_devices[d].dev_ops == drv_idx[i].dev_ops) {
++				reg_index_list[d] = drv_idx[i].reg_index;
++				break;
++			}
++		}
++		if (i < nb_drv_idx)
++			continue; /* we found a match, go to next port */
++
++		/* No match, register a new set of xstats for this port */
++		ret = rte_metrics_tel_reg_port_ethdev_to_metrics(d);
++		if (ret < 0) {
++			METRICS_LOG_ERR("Failed to register ethdev to metrics");
++			return ret;
++		}
++		reg_index_list[d] = ret;
++		drv_idx[nb_drv_idx].dev_ops = rte_eth_devices[d].dev_ops;
++		drv_idx[nb_drv_idx].reg_index = ret;
++		nb_drv_idx++;
++	}
++	*metrics_register_done = 1;
++	return 0;
++}
++
++static int32_t
++rte_metrics_tel_update_metrics_ethdev(uint16_t port_id, int reg_start_index)
++{
++	int ret, num_xstats, i;
++	struct rte_eth_xstat *eth_xstats;
++
++	num_xstats = rte_eth_xstats_get(port_id, NULL, 0);
++	if (num_xstats < 0) {
++		METRICS_LOG_ERR("rte_eth_xstats_get(%u) failed: %d", port_id,
++				num_xstats);
++		return -EPERM;
++	}
++	eth_xstats = malloc(sizeof(struct rte_eth_xstat) * num_xstats);
++	if (eth_xstats == NULL) {
++		METRICS_LOG_ERR("Failed to malloc memory for xstats");
++		return -ENOMEM;
++	}
++	ret = rte_eth_xstats_get(port_id, eth_xstats, num_xstats);
++	if (ret < 0 || ret > num_xstats) {
++		free(eth_xstats);
++		METRICS_LOG_ERR("rte_eth_xstats_get(%u) len%i failed: %d",
++				port_id, num_xstats, ret);
++		return -EPERM;
++	}
++
++	uint64_t xstats_values[num_xstats];
++	for (i = 0; i < num_xstats; i++)
++		xstats_values[i] = eth_xstats[i].value;
++	if (rte_metrics_update_values(port_id, reg_start_index, xstats_values,
++			num_xstats) < 0) {
++		METRICS_LOG_ERR("Could not update metrics values");
++		free(eth_xstats);
++		return -EPERM;
++	}
++	free(eth_xstats);
++	return 0;
++}
++
++static int32_t
++rte_metrics_tel_format_port(uint32_t pid, json_t *ports,
++	uint32_t *metric_ids, int num_metric_ids)
++{
++	struct rte_metric_value *metrics = NULL;
++	struct rte_metric_name *names = NULL;
++	int num_metrics, i, ret = -EPERM; /* most error cases return EPERM */
++	json_t *port, *stats;
++
++	num_metrics = rte_metrics_get_names(NULL, 0);
++	if (num_metrics < 0) {
++		METRICS_LOG_ERR("Cannot get metrics count");
++		return -EINVAL;
++	} else if (num_metrics == 0) {
++		METRICS_LOG_ERR("No metrics to display (none have been registered)");
++		return -EPERM;
++	}
++
++	metrics = malloc(sizeof(struct rte_metric_value) * num_metrics);
++	names = malloc(sizeof(struct rte_metric_name) * num_metrics);
++	if (metrics == NULL || names == NULL) {
++		METRICS_LOG_ERR("Cannot allocate memory");
++		return -ENOMEM;
++	}
++
++	if (rte_metrics_get_names(names, num_metrics) != num_metrics ||
++			rte_metrics_get_values(pid, metrics, num_metrics)
++				!= num_metrics) {
++		METRICS_LOG_ERR("Error getting metrics");
++		goto fail;
++	}
++
++	stats = json_array();
++	if (stats == NULL) {
++		METRICS_LOG_ERR("Could not create stats JSON object");
++		goto fail;
++	}
++
++	for (i = 0; i < num_metrics; i++) {
++		int32_t j;
++		for (j = 0; j < num_metric_ids; j++)
++			if (metrics[i].key == metric_ids[j])
++				break;
++
++		if (num_metric_ids > 0 && j == num_metric_ids)
++			continue; /* can't find this id */
++
++		json_t *stat = json_pack("{s,s,s,I}",
++				"name", names[metrics[i].key].name,
++				"value", metrics[i].value);
++		if (stat == NULL || json_array_append_new(stats, stat) < 0) {
++			METRICS_LOG_ERR("Format stat with id: %u failed",
++					metrics[i].key);
++			goto fail;
++		}
++	}
++
++	port = json_pack("{s,i,s,o}", "port", pid, "stats",
++			json_array_size(stats) ? stats : json_null());
++	if (port == NULL || json_array_append_new(ports, port) < 0) {
++		METRICS_LOG_ERR("Error creating port and adding to ports");
++		goto fail;
++	}
++
++	free(metrics);
++	free(names);
++	return 0;
++
++fail:
++	free(metrics);
++	free(names);
++	return ret;
++}
++
++int32_t
++rte_metrics_tel_encode_json_format(struct telemetry_encode_param *ep,
++		char **json_buffer)
++{
++	json_t *root, *ports;
++	int ret, i;
++
++	ports = json_array();
++	if (ports == NULL) {
++		METRICS_LOG_ERR("Could not create ports JSON array");
++		return -EPERM;
++	}
++
++	if (ep->type == PORT_STATS) {
++		if (ep->pp.num_port_ids <= 0) {
++			METRICS_LOG_ERR("Please provide port/metric ids");
++			return -EINVAL;
++		}
++
++		for (i = 0; i < ep->pp.num_port_ids; i++) {
++			ret = rte_metrics_tel_format_port(ep->pp.port_ids[i],
++					ports, &ep->pp.metric_ids[0],
++					ep->pp.num_metric_ids);
++			if (ret < 0) {
++				METRICS_LOG_ERR("Format port in JSON failed");
++				return ret;
++			}
++		}
++	} else if (ep->type == GLOBAL_STATS) {
++		/* Request Global Metrics */
++		ret = rte_metrics_tel_format_port(RTE_METRICS_GLOBAL,
++				ports, NULL, 0);
++		if (ret < 0) {
++			METRICS_LOG_ERR("Request Global Metrics Failed");
++			return ret;
++		}
++	} else {
++		METRICS_LOG_ERR("Invalid metrics type in encode params");
++		return -EINVAL;
++	}
++
++	root = json_pack("{s,s,s,o}", "status_code", "Status OK: 200",
++			"data", ports);
++	if (root == NULL) {
++		METRICS_LOG_ERR("Root, Status or data field cannot be set");
++		return -EPERM;
++	}
++
++	*json_buffer = json_dumps(root, JSON_INDENT(2));
++	json_decref(root);
++	return 0;
++}
++
++int32_t
++rte_metrics_tel_get_ports_stats_json(struct telemetry_encode_param *ep,
++		int *reg_index, char **json_buffer)
++{
++	int ret, i;
++	uint32_t port_id;
++
++	for (i = 0; i < ep->pp.num_port_ids; i++) {
++		port_id = ep->pp.port_ids[i];
++		if (!rte_eth_dev_is_valid_port(port_id)) {
++			METRICS_LOG_ERR("Port: %d invalid", port_id);
++			return -EINVAL;
++		}
++
++		ret = rte_metrics_tel_update_metrics_ethdev(port_id,
++				reg_index[i]);
++		if (ret < 0) {
++			METRICS_LOG_ERR("Failed to update ethdev metrics");
++			return ret;
++		}
++	}
++
++	ret = rte_metrics_tel_encode_json_format(ep, json_buffer);
++	if (ret < 0) {
++		METRICS_LOG_ERR("JSON encode function failed");
++		return ret;
++	}
++	return 0;
++}
++
++int32_t
++rte_metrics_tel_get_port_stats_ids(struct telemetry_encode_param *ep)
++{
++	int p, num_port_ids = 0;
++
++	RTE_ETH_FOREACH_DEV(p) {
++		ep->pp.port_ids[num_port_ids] = p;
++		num_port_ids++;
++	}
++
++	if (!num_port_ids) {
++		METRICS_LOG_ERR("No active ports");
++		return -EINVAL;
++	}
++
++	ep->pp.num_port_ids = num_port_ids;
++	ep->pp.num_metric_ids = 0;
++	ep->type = PORT_STATS;
++	return 0;
++}
++
++static int32_t
++rte_metrics_tel_stat_names_to_ids(const char * const *stat_names,
++	uint32_t *stat_ids, int num_stat_names)
++{
++	struct rte_metric_name *names;
++	int num_metrics;
++	int i, j, nb_stat_ids = 0;
++
++	num_metrics = rte_metrics_get_names(NULL, 0);
++	if (num_metrics <= 0) {
++		METRICS_LOG_ERR("Error getting metrics count - no metrics may be registered");
++		return -EPERM;
++	}
++
++	names = malloc(sizeof(struct rte_metric_name) * num_metrics);
++	if (names == NULL) {
++		METRICS_LOG_ERR("Cannot allocate memory for names");
++		return -ENOMEM;
++	}
++
++	if (rte_metrics_get_names(names, num_metrics) != num_metrics) {
++		METRICS_LOG_ERR("Cannot get metrics names");
++		free(names);
++		return -EPERM;
++	}
++
++	for (i = 0; i < num_stat_names; i++) {
++		for (j = 0; j < num_metrics; j++) {
++			if (strcmp(stat_names[i], names[j].name) == 0) {
++				stat_ids[nb_stat_ids++] = j;
++				break;
++			}
++		}
++		if (j == num_metrics) {
++			METRICS_LOG_WARN("Invalid stat name %s\n",
++					stat_names[i]);
++			free(names);
++			return -EINVAL;
++		}
++	}
++
++	free(names);
++	return 0;
++}
++
++int32_t
++rte_metrics_tel_extract_data(struct telemetry_encode_param *ep, json_t *data)
++{
++	int ret;
++	json_t *port_ids_json = json_object_get(data, "ports");
++	json_t *stat_names_json = json_object_get(data, "stats");
++	uint64_t num_stat_names = json_array_size(stat_names_json);
++	const char *stat_names[num_stat_names];
++	size_t index;
++	json_t *value;
++
++	memset(ep, 0, sizeof(*ep));
++	ep->pp.num_port_ids = json_array_size(port_ids_json);
++	ep->pp.num_metric_ids = num_stat_names;
++	if (!json_is_object(data) || !json_is_array(port_ids_json) ||
++			!json_is_array(stat_names_json)) {
++		METRICS_LOG_WARN("Invalid data provided for this command");
++		return -EINVAL;
++	}
++
++	json_array_foreach(port_ids_json, index, value) {
++		if (!json_is_integer(value)) {
++			METRICS_LOG_WARN("Port ID given is not valid");
++			return -EINVAL;
++		}
++		ep->pp.port_ids[index] = json_integer_value(value);
++		if (rte_eth_dev_is_valid_port(ep->pp.port_ids[index]) < 1)
++			return -EINVAL;
++	}
++	json_array_foreach(stat_names_json, index, value) {
++		if (!json_is_string(value)) {
++			METRICS_LOG_WARN("Stat Name given is not a string");
++			return -EINVAL;
++		}
++		stat_names[index] = json_string_value(value);
++	}
++
++	ret = rte_metrics_tel_stat_names_to_ids(stat_names, ep->pp.metric_ids,
++			num_stat_names);
++	if (ret < 0) {
++		METRICS_LOG_ERR("Could not convert stat names to IDs");
++		return ret;
++	}
++
++	ep->type = PORT_STATS;
++	return 0;
++}
++
++static int
++rte_metrics_tel_initial_metrics_setup(void)
++{
++	int ret;
++	rte_metrics_init(rte_socket_id());
++
++	if (!tel_met_data.metrics_register_done) {
++		ret = rte_metrics_tel_reg_all_ethdev(
++			&tel_met_data.metrics_register_done,
++			tel_met_data.reg_index);
++		if (ret < 0)
++			return ret;
++	}
++	return 0;
++}
++
++static int
++handle_ports_all_stats_values(const char *cmd __rte_unused,
++		const char *params __rte_unused,
++		char *buffer, int buf_len)
++{
++	struct telemetry_encode_param ep;
++	int ret, used = 0;
++	char *json_buffer = NULL;
++
++	ret = rte_metrics_tel_initial_metrics_setup();
++	if (ret < 0)
++		return ret;
++
++	memset(&ep, 0, sizeof(ep));
++	ret = rte_metrics_tel_get_port_stats_ids(&ep);
++	if (ret < 0)
++		return ret;
++
++	ret = rte_metrics_tel_get_ports_stats_json(&ep, tel_met_data.reg_index,
++			&json_buffer);
++	if (ret < 0)
++		return ret;
++
++	used += strlcpy(buffer, json_buffer, buf_len);
++	return used;
++}
++
++static int
++handle_global_stats_values(const char *cmd __rte_unused,
++		const char *params __rte_unused,
++		char *buffer, int buf_len)
++{
++	char *json_buffer = NULL;
++	struct telemetry_encode_param ep = { .type = GLOBAL_STATS };
++	int ret, used = 0;
++
++	ret = rte_metrics_tel_initial_metrics_setup();
++	if (ret < 0)
++		return ret;
++
++	ret = rte_metrics_tel_encode_json_format(&ep, &json_buffer);
++	if (ret < 0) {
++		METRICS_LOG_ERR("JSON encode function failed");
++		return ret;
++	}
++	used += strlcpy(buffer, json_buffer, buf_len);
++	return used;
++}
++
++static int
++handle_ports_stats_values_by_name(const char *cmd __rte_unused,
++		const char *params,
++		char *buffer, int buf_len)
++{
++	char *json_buffer = NULL;
++	struct telemetry_encode_param ep;
++	int ret, used = 0;
++	json_t *data;
++	json_error_t error;
++
++	ret = rte_metrics_tel_initial_metrics_setup();
++	if (ret < 0)
++		return ret;
++
++	data = json_loads(params, 0, &error);
++	if (!data) {
++		METRICS_LOG_WARN("Could not load JSON object from data passed in : %s",
++				error.text);
++		return -EPERM;
++	} else if (!json_is_object(data)) {
++		METRICS_LOG_WARN("JSON Request data is not a JSON object");
++		json_decref(data);
++		return -EINVAL;
++	}
++
++	ret = rte_metrics_tel_extract_data(&ep, data);
++	if (ret < 0) {
++		METRICS_LOG_ERR("Extract data function failed");
++		return ret;
++	}
++
++	ret = rte_metrics_tel_encode_json_format(&ep, &json_buffer);
++	if (ret < 0) {
++		METRICS_LOG_ERR("JSON encode function failed");
++		return ret;
++	}
++	used += strlcpy(buffer, json_buffer, buf_len);
++	return used;
++}
++
++RTE_INIT(metrics_ctor)
++{
++#ifdef RTE_LIBRTE_TELEMETRY
++	rte_telemetry_legacy_register("ports_all_stat_values", DATA_NOT_REQ,
++			handle_ports_all_stats_values);
++	rte_telemetry_legacy_register("global_stat_values", DATA_NOT_REQ,
++			handle_global_stats_values);
++	rte_telemetry_legacy_register("ports_stats_values_by_name", DATA_REQ,
++			handle_ports_stats_values_by_name);
++#endif
++	metrics_log_level = rte_log_register("lib.metrics");
++	if (metrics_log_level >= 0)
++		rte_log_set_level(metrics_log_level, RTE_LOG_ERR);
++}
+diff --git a/lib/librte_metrics/rte_metrics_telemetry.h b/lib/librte_metrics/rte_metrics_telemetry.h
+new file mode 100644
+index 0000000..6c2391c
+--- /dev/null
++++ b/lib/librte_metrics/rte_metrics_telemetry.h
+@@ -0,0 +1,65 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#ifdef RTE_LIBRTE_TELEMETRY
++#include <jansson.h>
++#else
++#define json_t void *
++#endif
++
++#include "rte_metrics.h"
++
++#ifndef _RTE_METRICS_TELEMETRY_H_
++#define _RTE_METRICS_TELEMETRY_H_
++
++
++enum rte_telemetry_stats_type {
++	PORT_STATS = 0,
++	GLOBAL_STATS = 1
++};
++
++struct telemetry_encode_param {
++	enum rte_telemetry_stats_type type;
++	struct port_param {
++		int num_metric_ids;
++		uint32_t metric_ids[RTE_METRICS_MAX_METRICS];
++		int num_port_ids;
++		uint32_t port_ids[RTE_MAX_ETHPORTS];
++	} pp;
++};
++
++struct telemetry_metrics_data {
++	int reg_index[RTE_MAX_ETHPORTS];
++	int metrics_register_done;
++};
++
++struct telemetry_metrics_data tel_met_data;
++
++__rte_experimental
++int32_t rte_metrics_tel_reg_all_ethdev(int *metrics_register_done,
++		int *reg_index_list);
++
++__rte_experimental
++int32_t
++rte_metrics_tel_encode_json_format(struct telemetry_encode_param *ep,
++		char **json_buffer);
++
++__rte_experimental
++int32_t
++rte_metrics_tel_get_global_stats(struct telemetry_encode_param *ep);
++
++__rte_experimental
++int32_t
++rte_metrics_tel_get_port_stats_ids(struct telemetry_encode_param *ep);
++
++__rte_experimental
++int32_t
++rte_metrics_tel_get_ports_stats_json(struct telemetry_encode_param *ep,
++		int *reg_index, char **json_buffer);
++
++__rte_experimental
++int32_t
++rte_metrics_tel_extract_data(struct telemetry_encode_param *ep, json_t *data);
++
++#endif
+diff --git a/lib/librte_metrics/rte_metrics_version.map b/lib/librte_metrics/rte_metrics_version.map
+index 85663f3..c88939b 100644
+--- a/lib/librte_metrics/rte_metrics_version.map
++++ b/lib/librte_metrics/rte_metrics_version.map
+@@ -16,4 +16,11 @@ EXPERIMENTAL {
+ 	global:
+ 
+ 	rte_metrics_deinit;
++	rte_metrics_tel_encode_json_format;
++	rte_metrics_tel_reg_all_ethdev;
++	rte_metrics_tel_get_global_stats;
++	rte_metrics_tel_get_port_stats_ids;
++	rte_metrics_tel_get_ports_stats_json;
++	rte_metrics_tel_extract_data;
++
+ };
+diff --git a/lib/librte_rawdev/meson.build b/lib/librte_rawdev/meson.build
+index a20fbdc..30d363c 100644
+--- a/lib/librte_rawdev/meson.build
++++ b/lib/librte_rawdev/meson.build
+@@ -3,3 +3,5 @@
+ 
+ sources = files('rte_rawdev.c')
+ headers = files('rte_rawdev.h', 'rte_rawdev_pmd.h')
++
++deps += ['telemetry']
+diff --git a/lib/librte_rawdev/rte_rawdev.c b/lib/librte_rawdev/rte_rawdev.c
+index b6f1e1c..c332a76 100644
+--- a/lib/librte_rawdev/rte_rawdev.c
++++ b/lib/librte_rawdev/rte_rawdev.c
+@@ -29,6 +29,7 @@
+ #include <rte_common.h>
+ #include <rte_malloc.h>
+ #include <rte_errno.h>
++#include <rte_telemetry.h>
+ 
+ #include "rte_rawdev.h"
+ #include "rte_rawdev_pmd.h"
+@@ -544,9 +545,81 @@ rte_rawdev_pmd_release(struct rte_rawdev *rawdev)
+ 	return 0;
+ }
+ 
++static int
++handle_dev_list(const char *cmd __rte_unused,
++		const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	int i;
++
++	rte_tel_data_start_array(d, RTE_TEL_INT_VAL);
++	for (i = 0; i < rawdev_globals.nb_devs; i++)
++		if (rte_rawdevices[i].attached == RTE_RAWDEV_ATTACHED)
++			rte_tel_data_add_array_int(d, i);
++	return 0;
++}
++
++static int
++handle_dev_xstats(const char *cmd __rte_unused,
++		const char *params,
++		struct rte_tel_data *d)
++{
++	uint64_t *rawdev_xstats;
++	struct rte_rawdev_xstats_name *xstat_names;
++	int dev_id, num_xstats, i, ret;
++	unsigned int *ids;
++
++	if (params == NULL || strlen(params) == 0 || !isdigit(*params))
++		return -1;
++
++	dev_id = atoi(params);
++	if (!rte_rawdev_pmd_is_valid_dev(dev_id))
++		return -1;
++
++	num_xstats = xstats_get_count(dev_id);
++	if (num_xstats < 0)
++		return -1;
++
++	/* use one malloc for names, stats and ids */
++	rawdev_xstats = malloc((sizeof(uint64_t) +
++			sizeof(struct rte_rawdev_xstats_name) +
++			sizeof(unsigned int)) * num_xstats);
++	if (rawdev_xstats == NULL)
++		return -1;
++	xstat_names = (void *)&rawdev_xstats[num_xstats];
++	ids = (void *)&xstat_names[num_xstats];
++
++	ret = rte_rawdev_xstats_names_get(dev_id, xstat_names, num_xstats);
++	if (ret < 0 || ret > num_xstats) {
++		free(rawdev_xstats);
++		return -1;
++	}
++
++	for (i = 0; i < num_xstats; i++)
++		ids[i] = i;
++
++	ret = rte_rawdev_xstats_get(dev_id, ids, rawdev_xstats, num_xstats);
++	if (ret < 0 || ret > num_xstats) {
++		free(rawdev_xstats);
++		return -1;
++	}
++
++	rte_tel_data_start_dict(d);
++	for (i = 0; i < num_xstats; i++)
++		rte_tel_data_add_dict_u64(d, xstat_names[i].name,
++				rawdev_xstats[i]);
++
++	free(rawdev_xstats);
++	return 0;
++}
++
+ RTE_INIT(librawdev_init_log)
+ {
+ 	librawdev_logtype = rte_log_register("lib.rawdev");
+ 	if (librawdev_logtype >= 0)
+ 		rte_log_set_level(librawdev_logtype, RTE_LOG_INFO);
++	rte_telemetry_register_cmd("/rawdev/list", handle_dev_list,
++			"Returns list of available rawdev ports. Takes no parameters");
++	rte_telemetry_register_cmd("/rawdev/xstats", handle_dev_xstats,
++			"Returns the xstats for a rawdev port. Parameters: int port_id");
+ }
+diff --git a/lib/librte_telemetry/Makefile b/lib/librte_telemetry/Makefile
+index f364548..eecf0de 100644
+--- a/lib/librte_telemetry/Makefile
++++ b/lib/librte_telemetry/Makefile
+@@ -6,23 +6,26 @@ include $(RTE_SDK)/mk/rte.vars.mk
+ # library name
+ LIB = librte_telemetry.a
+ 
++ARCH_DIR ?= $(RTE_ARCH)
++
+ CFLAGS += -O3
+ CFLAGS += $(WERROR_FLAGS) -I$(SRCDIR)
+ CFLAGS += -DALLOW_EXPERIMENTAL_API
++CFLAGS += -I$(RTE_SDK)/lib/librte_metrics/
++CFLAGS += -I$(RTE_SDK)/lib/librte_eal/common/include
++CFLAGS += -I$(RTE_SDK)/lib/librte_eal/common/include/arch/$(ARCH_DIR)/
++CFLAGS += -pthread
+ 
+-LDLIBS += -lrte_eal -lrte_ethdev
+-LDLIBS += -lrte_metrics
+ LDLIBS += -lpthread
+-LDLIBS += -ljansson
+ 
+ EXPORT_MAP := rte_telemetry_version.map
+ 
+ # library source files
+-SRCS-$(CONFIG_RTE_LIBRTE_TELEMETRY) := rte_telemetry.c
+-SRCS-$(CONFIG_RTE_LIBRTE_TELEMETRY) += rte_telemetry_parser.c
+-SRCS-$(CONFIG_RTE_LIBRTE_TELEMETRY) += rte_telemetry_parser_test.c
++SRCS-y += telemetry.c
++SRCS-y += telemetry_data.c
++SRCS-y += telemetry_legacy.c
+ 
+ # export include files
+-SYMLINK-$(CONFIG_RTE_LIBRTE_TELEMETRY)-include := rte_telemetry.h
++SYMLINK-y-include := rte_telemetry.h
+ 
+ include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/lib/librte_telemetry/meson.build b/lib/librte_telemetry/meson.build
+index 26a3311..719973f 100644
+--- a/lib/librte_telemetry/meson.build
++++ b/lib/librte_telemetry/meson.build
+@@ -1,16 +1,8 @@
+ # SPDX-License-Identifier: BSD-3-Clause
+ # Copyright(c) 2018 Intel Corporation
+ 
+-sources = files('rte_telemetry.c', 'rte_telemetry_parser.c', 'rte_telemetry_parser_test.c')
+-headers = files('rte_telemetry.h', 'rte_telemetry_internal.h', 'rte_telemetry_parser.h')
+-deps += ['metrics', 'ethdev']
+-cflags += '-DALLOW_EXPERIMENTAL_API'
++includes = [global_inc]
+ 
+-jansson = dependency('jansson', required: false)
+-if jansson.found()
+-	ext_deps += jansson
+-	dpdk_app_link_libraries += ['telemetry']
+-else
+-	build = false
+-	reason = 'missing dependency "jansson"'
+-endif
++sources = files('telemetry.c', 'telemetry_data.c', 'telemetry_legacy.c')
++headers = files('rte_telemetry.h')
++includes += include_directories('../librte_metrics')
+diff --git a/lib/librte_telemetry/rte_telemetry.c b/lib/librte_telemetry/rte_telemetry.c
+deleted file mode 100644
+index eb20cc6..0000000
+--- a/lib/librte_telemetry/rte_telemetry.c
++++ /dev/null
+@@ -1,1895 +0,0 @@
+-/* SPDX-License-Identifier: BSD-3-Clause
+- * Copyright(c) 2018 Intel Corporation
+- */
+-
+-#include <unistd.h>
+-#include <fcntl.h>
+-#include <pthread.h>
+-#include <sys/socket.h>
+-#include <sys/un.h>
+-#include <jansson.h>
+-
+-#include <rte_eal.h>
+-#include <rte_ethdev.h>
+-#include <rte_metrics.h>
+-#include <rte_option.h>
+-#include <rte_string_fns.h>
+-
+-#include "rte_telemetry.h"
+-#include "rte_telemetry_internal.h"
+-#include "rte_telemetry_parser.h"
+-#include "rte_telemetry_socket_tests.h"
+-
+-#define BUF_SIZE 1024
+-#define ACTION_POST 1
+-#define SLEEP_TIME 10
+-
+-#define SELFTEST_VALID_CLIENT "/var/run/dpdk/valid_client"
+-#define SELFTEST_INVALID_CLIENT "/var/run/dpdk/invalid_client"
+-#define SOCKET_TEST_CLIENT_PATH "/var/run/dpdk/client"
+-
+-static telemetry_impl *static_telemetry;
+-
+-struct telemetry_message_test {
+-	const char *test_name;
+-	int (*test_func_ptr)(struct telemetry_impl *telemetry, int fd);
+-};
+-
+-struct json_data {
+-	char *status_code;
+-	const char *data;
+-	int port;
+-	char *stat_name;
+-	int stat_value;
+-};
+-
+-static void
+-rte_telemetry_get_runtime_dir(char *socket_path, size_t size)
+-{
+-	snprintf(socket_path, size, "%s/telemetry", rte_eal_get_runtime_dir());
+-}
+-
+-int32_t
+-rte_telemetry_is_port_active(int port_id)
+-{
+-	int ret;
+-
+-	ret = rte_eth_find_next(port_id);
+-	if (ret == port_id)
+-		return 1;
+-
+-	TELEMETRY_LOG_ERR("port_id: %d is invalid, not active",
+-		port_id);
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_update_metrics_ethdev(struct telemetry_impl *telemetry,
+-	uint16_t port_id, int reg_start_index)
+-{
+-	int ret, num_xstats, i;
+-	struct rte_eth_xstat *eth_xstats;
+-
+-	if (!rte_eth_dev_is_valid_port(port_id)) {
+-		TELEMETRY_LOG_ERR("port_id: %d is invalid", port_id);
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_is_port_active(port_id);
+-	if (ret < 1) {
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	num_xstats = rte_eth_xstats_get(port_id, NULL, 0);
+-	if (num_xstats < 0) {
+-		TELEMETRY_LOG_ERR("rte_eth_xstats_get(%u) failed: %d", port_id,
+-				num_xstats);
+-		ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	eth_xstats = malloc(sizeof(struct rte_eth_xstat) * num_xstats);
+-	if (eth_xstats == NULL) {
+-		TELEMETRY_LOG_ERR("Failed to malloc memory for xstats");
+-		ret = rte_telemetry_send_error_response(telemetry, -ENOMEM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	ret = rte_eth_xstats_get(port_id, eth_xstats, num_xstats);
+-	if (ret < 0 || ret > num_xstats) {
+-		free(eth_xstats);
+-		TELEMETRY_LOG_ERR("rte_eth_xstats_get(%u) len%i failed: %d",
+-				port_id, num_xstats, ret);
+-		ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	uint64_t xstats_values[num_xstats];
+-	for (i = 0; i < num_xstats; i++)
+-		xstats_values[i] = eth_xstats[i].value;
+-
+-	ret = rte_metrics_update_values(port_id, reg_start_index, xstats_values,
+-			num_xstats);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not update metrics values");
+-		ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		free(eth_xstats);
+-		return -1;
+-	}
+-
+-	free(eth_xstats);
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_write_to_socket(struct telemetry_impl *telemetry,
+-	const char *json_string)
+-{
+-	int ret;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Could not initialise TELEMETRY_API");
+-		return -1;
+-	}
+-
+-	if (telemetry->request_client == NULL) {
+-		TELEMETRY_LOG_ERR("No client has been chosen to write to");
+-		return -1;
+-	}
+-
+-	if (json_string == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid JSON string!");
+-		return -1;
+-	}
+-
+-	ret = send(telemetry->request_client->fd,
+-			json_string, strlen(json_string), 0);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Failed to write to socket for client: %s",
+-				telemetry->request_client->file_path);
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_send_error_response(struct telemetry_impl *telemetry,
+-	int error_type)
+-{
+-	int ret;
+-	const char *status_code, *json_buffer;
+-	json_t *root;
+-
+-	if (error_type == -EPERM)
+-		status_code = "Status Error: Unknown";
+-	else if (error_type == -EINVAL)
+-		status_code = "Status Error: Invalid Argument 404";
+-	else if (error_type == -ENOMEM)
+-		status_code = "Status Error: Memory Allocation Error";
+-	else {
+-		TELEMETRY_LOG_ERR("Invalid error type");
+-		return -EINVAL;
+-	}
+-
+-	root = json_object();
+-
+-	if (root == NULL) {
+-		TELEMETRY_LOG_ERR("Could not create root JSON object");
+-		return -EPERM;
+-	}
+-
+-	ret = json_object_set_new(root, "status_code", json_string(status_code));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Status code field cannot be set");
+-		json_decref(root);
+-		return -EPERM;
+-	}
+-
+-	ret = json_object_set_new(root, "data", json_null());
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Data field cannot be set");
+-		json_decref(root);
+-		return -EPERM;
+-	}
+-
+-	json_buffer = json_dumps(root, 0);
+-	json_decref(root);
+-
+-	ret = rte_telemetry_write_to_socket(telemetry, json_buffer);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not write to socket");
+-		return -EPERM;
+-	}
+-
+-	return 0;
+-}
+-
+-static int
+-rte_telemetry_get_metrics(struct telemetry_impl *telemetry, uint32_t port_id,
+-	struct rte_metric_value *metrics, struct rte_metric_name *names,
+-	int num_metrics)
+-{
+-	int ret, num_values;
+-
+-	if (num_metrics < 0) {
+-		TELEMETRY_LOG_ERR("Invalid metrics count");
+-		goto einval_fail;
+-	} else if (num_metrics == 0) {
+-		TELEMETRY_LOG_ERR("No metrics to display (none have been registered)");
+-		goto eperm_fail;
+-	}
+-
+-	if (metrics == NULL) {
+-		TELEMETRY_LOG_ERR("Metrics must be initialised.");
+-		goto einval_fail;
+-	}
+-
+-	if (names == NULL) {
+-		TELEMETRY_LOG_ERR("Names must be initialised.");
+-		goto einval_fail;
+-	}
+-
+-	ret = rte_metrics_get_names(names, num_metrics);
+-	if (ret < 0 || ret > num_metrics) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics names");
+-		goto eperm_fail;
+-	}
+-
+-	num_values = rte_metrics_get_values(port_id, NULL, 0);
+-	ret = rte_metrics_get_values(port_id, metrics, num_values);
+-	if (ret < 0 || ret > num_values) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics values");
+-		goto eperm_fail;
+-	}
+-
+-	return 0;
+-
+-eperm_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-
+-}
+-
+-static int32_t
+-rte_telemetry_json_format_stat(struct telemetry_impl *telemetry, json_t *stats,
+-	const char *metric_name, uint64_t metric_value)
+-{
+-	int ret;
+-	json_t *stat = json_object();
+-
+-	if (stat == NULL) {
+-		TELEMETRY_LOG_ERR("Could not create stat JSON object");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_object_set_new(stat, "name", json_string(metric_name));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Stat Name field cannot be set");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_object_set_new(stat, "value", json_integer(metric_value));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Stat Value field cannot be set");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_array_append_new(stats, stat);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Stat cannot be added to stats json array");
+-		goto eperm_fail;
+-	}
+-
+-	return 0;
+-
+-eperm_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-
+-}
+-
+-static int32_t
+-rte_telemetry_json_format_port(struct telemetry_impl *telemetry,
+-	uint32_t port_id, json_t *ports, uint32_t *metric_ids,
+-	int num_metric_ids)
+-{
+-	struct rte_metric_value *metrics = 0;
+-	struct rte_metric_name *names = 0;
+-	int num_metrics, ret, err_ret;
+-	json_t *port, *stats;
+-	int i;
+-
+-	num_metrics = rte_metrics_get_names(NULL, 0);
+-	if (num_metrics < 0) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics count");
+-		goto einval_fail;
+-	} else if (num_metrics == 0) {
+-		TELEMETRY_LOG_ERR("No metrics to display (none have been registered)");
+-		goto eperm_fail;
+-	}
+-
+-	metrics = malloc(sizeof(struct rte_metric_value) * num_metrics);
+-	names = malloc(sizeof(struct rte_metric_name) * num_metrics);
+-	if (metrics == NULL || names == NULL) {
+-		TELEMETRY_LOG_ERR("Cannot allocate memory");
+-		free(metrics);
+-		free(names);
+-
+-		err_ret = rte_telemetry_send_error_response(telemetry, -ENOMEM);
+-		if (err_ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	ret  = rte_telemetry_get_metrics(telemetry, port_id, metrics, names,
+-		num_metrics);
+-	if (ret < 0) {
+-		free(metrics);
+-		free(names);
+-		TELEMETRY_LOG_ERR("rte_telemetry_get_metrics failed");
+-		return -1;
+-	}
+-
+-	port = json_object();
+-	stats = json_array();
+-	if (port == NULL || stats == NULL) {
+-		TELEMETRY_LOG_ERR("Could not create port/stats JSON objects");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_object_set_new(port, "port", json_integer(port_id));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Port field cannot be set");
+-		goto eperm_fail;
+-	}
+-
+-	for (i = 0; i < num_metric_ids; i++) {
+-		int metric_id = metric_ids[i];
+-		int metric_index = -1;
+-		int metric_name_key = -1;
+-		int32_t j;
+-		uint64_t metric_value;
+-
+-		if (metric_id >= num_metrics) {
+-			TELEMETRY_LOG_ERR("Metric_id: %d is not valid",
+-					metric_id);
+-			goto einval_fail;
+-		}
+-
+-		for (j = 0; j < num_metrics; j++) {
+-			if (metrics[j].key == metric_id) {
+-				metric_name_key = metrics[j].key;
+-				metric_index = j;
+-				break;
+-			}
+-		}
+-
+-		const char *metric_name = names[metric_name_key].name;
+-		metric_value = metrics[metric_index].value;
+-
+-		if (metric_name_key < 0 || metric_index < 0) {
+-			TELEMETRY_LOG_ERR("Could not get metric name/index");
+-			goto eperm_fail;
+-		}
+-
+-		ret = rte_telemetry_json_format_stat(telemetry, stats,
+-			metric_name, metric_value);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Format stat with id: %u failed",
+-					metric_id);
+-			free(metrics);
+-			free(names);
+-			return -1;
+-		}
+-	}
+-
+-	if (json_array_size(stats) == 0)
+-		ret = json_object_set_new(port, "stats", json_null());
+-	else
+-		ret = json_object_set_new(port, "stats", stats);
+-
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Stats object cannot be set");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_array_append_new(ports, port);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Port object cannot be added to ports array");
+-		goto eperm_fail;
+-	}
+-
+-	free(metrics);
+-	free(names);
+-	return 0;
+-
+-eperm_fail:
+-	free(metrics);
+-	free(names);
+-	ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-
+-einval_fail:
+-	free(metrics);
+-	free(names);
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_encode_json_format(struct telemetry_impl *telemetry,
+-	struct telemetry_encode_param *ep, char **json_buffer)
+-{
+-	int ret;
+-	json_t *root, *ports;
+-	int i;
+-	uint32_t port_id;
+-	int num_port_ids;
+-	int num_metric_ids;
+-
+-	ports = json_array();
+-	if (ports == NULL) {
+-		TELEMETRY_LOG_ERR("Could not create ports JSON array");
+-		goto eperm_fail;
+-	}
+-
+-	if (ep->type == PORT_STATS) {
+-		num_port_ids = ep->pp.num_port_ids;
+-		num_metric_ids = ep->pp.num_metric_ids;
+-
+-		if (num_port_ids <= 0 || num_metric_ids <= 0) {
+-			TELEMETRY_LOG_ERR("Please provide port and metric ids to query");
+-			goto einval_fail;
+-		}
+-
+-		for (i = 0; i < num_port_ids; i++) {
+-			port_id = ep->pp.port_ids[i];
+-			if (!rte_eth_dev_is_valid_port(port_id)) {
+-				TELEMETRY_LOG_ERR("Port: %d invalid",
+-							port_id);
+-				goto einval_fail;
+-			}
+-		}
+-
+-		for (i = 0; i < num_port_ids; i++) {
+-			port_id = ep->pp.port_ids[i];
+-			ret = rte_telemetry_json_format_port(telemetry,
+-					port_id, ports, &ep->pp.metric_ids[0],
+-					num_metric_ids);
+-			if (ret < 0) {
+-				TELEMETRY_LOG_ERR("Format port in JSON failed");
+-				return -1;
+-			}
+-		}
+-	} else if (ep->type == GLOBAL_STATS) {
+-		/* Request Global Metrics */
+-		ret = rte_telemetry_json_format_port(telemetry,
+-				RTE_METRICS_GLOBAL,
+-				ports, &ep->gp.metric_ids[0],
+-				ep->gp.num_metric_ids);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR(" Request Global Metrics Failed");
+-			return -1;
+-		}
+-	} else {
+-		TELEMETRY_LOG_ERR(" Invalid metrics type in encode params");
+-		goto einval_fail;
+-	}
+-
+-	root = json_object();
+-	if (root == NULL) {
+-		TELEMETRY_LOG_ERR("Could not create root JSON object");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_object_set_new(root, "status_code",
+-		json_string("Status OK: 200"));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Status code field cannot be set");
+-		goto eperm_fail;
+-	}
+-
+-	ret = json_object_set_new(root, "data", ports);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Data field cannot be set");
+-		goto eperm_fail;
+-	}
+-
+-	*json_buffer = json_dumps(root, JSON_INDENT(2));
+-	json_decref(root);
+-	return 0;
+-
+-eperm_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-int32_t
+-rte_telemetry_send_global_stats_values(struct telemetry_encode_param *ep,
+-	struct telemetry_impl *telemetry)
+-{
+-	int ret;
+-	char *json_buffer = NULL;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (ep->gp.num_metric_ids < 0) {
+-		TELEMETRY_LOG_ERR("Invalid num_metric_ids, must be positive");
+-		goto einval_fail;
+-	}
+-
+-	ret = rte_telemetry_encode_json_format(telemetry, ep,
+-		&json_buffer);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("JSON encode function failed");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_write_to_socket(telemetry, json_buffer);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not write to socket");
+-		return -1;
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-int32_t
+-rte_telemetry_send_ports_stats_values(struct telemetry_encode_param *ep,
+-	struct telemetry_impl *telemetry)
+-{
+-	int ret;
+-	char *json_buffer = NULL;
+-	uint32_t port_id;
+-	int i;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (ep == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid encode param argument");
+-		goto einval_fail;
+-	}
+-
+-	if (ep->pp.num_metric_ids < 0) {
+-		TELEMETRY_LOG_ERR("Invalid num_metric_ids, must be positive");
+-		goto einval_fail;
+-	}
+-
+-	if (ep->pp.num_port_ids < 0) {
+-		TELEMETRY_LOG_ERR("Invalid num_port_ids, must be positive");
+-		goto einval_fail;
+-	}
+-
+-	for (i = 0; i < ep->pp.num_port_ids; i++) {
+-		port_id = ep->pp.port_ids[i];
+-		if (!rte_eth_dev_is_valid_port(port_id)) {
+-			TELEMETRY_LOG_ERR("Port: %d invalid", port_id);
+-			goto einval_fail;
+-		}
+-
+-		ret = rte_telemetry_update_metrics_ethdev(telemetry,
+-				port_id, telemetry->reg_index[i]);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Failed to update ethdev metrics");
+-			return -1;
+-		}
+-	}
+-
+-	ret = rte_telemetry_encode_json_format(telemetry, ep, &json_buffer);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("JSON encode function failed");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_write_to_socket(telemetry, json_buffer);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not write to socket");
+-		return -1;
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-
+-static int32_t
+-rte_telemetry_reg_ethdev_to_metrics(uint16_t port_id)
+-{
+-	int ret, num_xstats, ret_val, i;
+-	struct rte_eth_xstat *eth_xstats = NULL;
+-	struct rte_eth_xstat_name *eth_xstats_names = NULL;
+-
+-	if (!rte_eth_dev_is_valid_port(port_id)) {
+-		TELEMETRY_LOG_ERR("port_id: %d is invalid", port_id);
+-		return -EINVAL;
+-	}
+-
+-	num_xstats = rte_eth_xstats_get(port_id, NULL, 0);
+-	if (num_xstats < 0) {
+-		TELEMETRY_LOG_ERR("rte_eth_xstats_get(%u) failed: %d",
+-				port_id, num_xstats);
+-		return -EPERM;
+-	}
+-
+-	eth_xstats = malloc(sizeof(struct rte_eth_xstat) * num_xstats);
+-	if (eth_xstats == NULL) {
+-		TELEMETRY_LOG_ERR("Failed to malloc memory for xstats");
+-		return -ENOMEM;
+-	}
+-
+-	ret = rte_eth_xstats_get(port_id, eth_xstats, num_xstats);
+-	const char *xstats_names[num_xstats];
+-	eth_xstats_names = malloc(sizeof(struct rte_eth_xstat_name) * num_xstats);
+-	if (ret < 0 || ret > num_xstats) {
+-		TELEMETRY_LOG_ERR("rte_eth_xstats_get(%u) len%i failed: %d",
+-				port_id, num_xstats, ret);
+-		ret_val = -EPERM;
+-		goto free_xstats;
+-	}
+-
+-	if (eth_xstats_names == NULL) {
+-		TELEMETRY_LOG_ERR("Failed to malloc memory for xstats_names");
+-		ret_val = -ENOMEM;
+-		goto free_xstats;
+-	}
+-
+-	ret = rte_eth_xstats_get_names(port_id, eth_xstats_names, num_xstats);
+-	if (ret < 0 || ret > num_xstats) {
+-		TELEMETRY_LOG_ERR("rte_eth_xstats_get_names(%u) len%i failed: %d",
+-				port_id, num_xstats, ret);
+-		ret_val = -EPERM;
+-		goto free_xstats;
+-	}
+-
+-	for (i = 0; i < num_xstats; i++)
+-		xstats_names[i] = eth_xstats_names[eth_xstats[i].id].name;
+-
+-	ret_val = rte_metrics_reg_names(xstats_names, num_xstats);
+-	if (ret_val < 0) {
+-		TELEMETRY_LOG_ERR("rte_metrics_reg_names failed - metrics may already be registered");
+-		ret_val = -1;
+-		goto free_xstats;
+-	}
+-
+-	goto free_xstats;
+-
+-free_xstats:
+-	free(eth_xstats);
+-	free(eth_xstats_names);
+-	return ret_val;
+-}
+-
+-static int32_t
+-rte_telemetry_initial_accept(struct telemetry_impl *telemetry)
+-{
+-	struct driver_index {
+-		const void *dev_ops;
+-		int reg_index;
+-	} drv_idx[RTE_MAX_ETHPORTS] = { {0} };
+-	int nb_drv_idx = 0;
+-	uint16_t pid;
+-	int ret;
+-	int selftest = 0;
+-
+-	RTE_ETH_FOREACH_DEV(pid) {
+-		int i;
+-		/* Different device types have different numbers of stats, so
+-		 * first check if the stats for this type of device have
+-		 * already been registered
+-		 */
+-		for (i = 0; i < nb_drv_idx; i++) {
+-			if (rte_eth_devices[pid].dev_ops == drv_idx[i].dev_ops) {
+-				telemetry->reg_index[pid] = drv_idx[i].reg_index;
+-				break;
+-			}
+-		}
+-		if (i < nb_drv_idx)
+-			continue; /* we found a match, go to next port */
+-
+-		/* No match, register a new set of xstats for this port */
+-		ret = rte_telemetry_reg_ethdev_to_metrics(pid);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Failed to register ethdev metrics");
+-			return -1;
+-		}
+-		telemetry->reg_index[pid] = ret;
+-		drv_idx[nb_drv_idx].dev_ops = rte_eth_devices[pid].dev_ops;
+-		drv_idx[nb_drv_idx].reg_index = ret;
+-		nb_drv_idx++;
+-	}
+-
+-	telemetry->metrics_register_done = 1;
+-	if (selftest) {
+-		ret = rte_telemetry_socket_messaging_testing(telemetry->reg_index[0],
+-				telemetry->server_fd);
+-		if (ret < 0)
+-			return -1;
+-
+-		ret = rte_telemetry_parser_test(telemetry);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Parser Tests Failed");
+-			return -1;
+-		}
+-
+-		TELEMETRY_LOG_INFO("Success - All Parser Tests Passed");
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_read_client(struct telemetry_impl *telemetry)
+-{
+-	char buf[BUF_SIZE];
+-	int ret, buffer_read;
+-
+-	buffer_read = read(telemetry->accept_fd, buf, BUF_SIZE-1);
+-
+-	if (buffer_read == -1) {
+-		TELEMETRY_LOG_ERR("Read error");
+-		return -1;
+-	} else if (buffer_read == 0) {
+-		goto close_socket;
+-	} else {
+-		buf[buffer_read] = '\0';
+-		ret = rte_telemetry_parse_client_message(telemetry, buf);
+-		if (ret < 0)
+-			TELEMETRY_LOG_WARN("Parse message failed");
+-		goto close_socket;
+-	}
+-
+-close_socket:
+-	if (close(telemetry->accept_fd) < 0) {
+-		TELEMETRY_LOG_ERR("Close TELEMETRY socket failed");
+-		free(telemetry);
+-		return -EPERM;
+-	}
+-	telemetry->accept_fd = 0;
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_accept_new_client(struct telemetry_impl *telemetry)
+-{
+-	int ret;
+-
+-	if (telemetry->accept_fd <= 0) {
+-		ret = listen(telemetry->server_fd, 1);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Listening error with server fd");
+-			return -1;
+-		}
+-
+-		telemetry->accept_fd = accept(telemetry->server_fd, NULL, NULL);
+-		if (telemetry->accept_fd >= 0 &&
+-			telemetry->metrics_register_done == 0) {
+-			ret = rte_telemetry_initial_accept(telemetry);
+-			if (ret < 0) {
+-				TELEMETRY_LOG_ERR("Failed to run initial configurations/tests");
+-				return -1;
+-			}
+-		}
+-	} else {
+-		ret = rte_telemetry_read_client(telemetry);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Failed to read socket buffer");
+-			return -1;
+-		}
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_read_client_sockets(struct telemetry_impl *telemetry)
+-{
+-	int ret;
+-	telemetry_client *client;
+-	char client_buf[BUF_SIZE];
+-	int bytes;
+-
+-	TAILQ_FOREACH(client, &telemetry->client_list_head, client_list) {
+-		bytes = read(client->fd, client_buf, BUF_SIZE-1);
+-
+-		if (bytes > 0) {
+-			client_buf[bytes] = '\0';
+-			telemetry->request_client = client;
+-			ret = rte_telemetry_parse(telemetry, client_buf);
+-			if (ret < 0) {
+-				TELEMETRY_LOG_WARN("Parse socket input failed: %i",
+-						ret);
+-				return -1;
+-			}
+-		}
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_run(void *userdata)
+-{
+-	int ret;
+-	struct telemetry_impl *telemetry = userdata;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_WARN("TELEMETRY could not be initialised");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_accept_new_client(telemetry);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Accept and read new client failed");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_read_client_sockets(telemetry);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Client socket read failed");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-static void
+-*rte_telemetry_run_thread_func(void *userdata)
+-{
+-	int ret;
+-	struct telemetry_impl *telemetry = userdata;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("%s passed a NULL instance", __func__);
+-		pthread_exit(0);
+-	}
+-
+-	while (telemetry->thread_status) {
+-		rte_telemetry_run(telemetry);
+-		ret = usleep(SLEEP_TIME);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Calling thread could not be put to sleep");
+-	}
+-	pthread_exit(0);
+-}
+-
+-static int32_t
+-rte_telemetry_set_socket_nonblock(int fd)
+-{
+-	int flags;
+-
+-	if (fd < 0) {
+-		TELEMETRY_LOG_ERR("Invalid fd provided");
+-		return -1;
+-	}
+-
+-	flags = fcntl(fd, F_GETFL, 0);
+-	if (flags < 0)
+-		flags = 0;
+-
+-	return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+-}
+-
+-static int32_t
+-rte_telemetry_create_socket(struct telemetry_impl *telemetry)
+-{
+-	int ret;
+-	struct sockaddr_un addr;
+-	char socket_path[BUF_SIZE];
+-
+-	if (telemetry == NULL)
+-		return -1;
+-
+-	telemetry->server_fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+-	if (telemetry->server_fd == -1) {
+-		TELEMETRY_LOG_ERR("Failed to open socket");
+-		return -1;
+-	}
+-
+-	ret  = rte_telemetry_set_socket_nonblock(telemetry->server_fd);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not set socket to NONBLOCK");
+-		goto close_socket;
+-	}
+-
+-	addr.sun_family = AF_UNIX;
+-	rte_telemetry_get_runtime_dir(socket_path, sizeof(socket_path));
+-	strlcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
+-	unlink(socket_path);
+-
+-	if (bind(telemetry->server_fd, (struct sockaddr *)&addr,
+-		sizeof(addr)) < 0) {
+-		TELEMETRY_LOG_ERR("Socket binding error");
+-		goto close_socket;
+-	}
+-
+-	return 0;
+-
+-close_socket:
+-	if (close(telemetry->server_fd) < 0) {
+-		TELEMETRY_LOG_ERR("Close TELEMETRY socket failed");
+-		return -EPERM;
+-	}
+-
+-	return -1;
+-}
+-
+-int32_t
+-rte_telemetry_init(void)
+-{
+-	int ret;
+-	pthread_attr_t attr;
+-	const char *telemetry_ctrl_thread = "telemetry";
+-
+-	if (static_telemetry) {
+-		TELEMETRY_LOG_WARN("TELEMETRY structure already initialised");
+-		return -EALREADY;
+-	}
+-
+-	static_telemetry = calloc(1, sizeof(struct telemetry_impl));
+-	if (static_telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Memory could not be allocated");
+-		return -ENOMEM;
+-	}
+-
+-	static_telemetry->socket_id = rte_socket_id();
+-	rte_metrics_init(static_telemetry->socket_id);
+-
+-	ret = pthread_attr_init(&attr);
+-	if (ret != 0) {
+-		TELEMETRY_LOG_ERR("Pthread attribute init failed");
+-		return -EPERM;
+-	}
+-
+-	ret = rte_telemetry_create_socket(static_telemetry);
+-	if (ret < 0) {
+-		ret = rte_telemetry_cleanup();
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("TELEMETRY cleanup failed");
+-		return -EPERM;
+-	}
+-	TAILQ_INIT(&static_telemetry->client_list_head);
+-
+-	ret = rte_ctrl_thread_create(&static_telemetry->thread_id,
+-		telemetry_ctrl_thread, &attr, rte_telemetry_run_thread_func,
+-		(void *)static_telemetry);
+-	static_telemetry->thread_status = 1;
+-
+-	if (ret < 0) {
+-		ret = rte_telemetry_cleanup();
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("TELEMETRY cleanup failed");
+-		return -EPERM;
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_client_cleanup(struct telemetry_client *client)
+-{
+-	int ret;
+-
+-	ret = close(client->fd);
+-	free(client->file_path);
+-	free(client);
+-
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Close client socket failed");
+-		return -EPERM;
+-	}
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_cleanup(void)
+-{
+-	int ret;
+-	struct telemetry_impl *telemetry = static_telemetry;
+-	telemetry_client *client, *temp_client;
+-
+-	TAILQ_FOREACH_SAFE(client, &telemetry->client_list_head, client_list,
+-		temp_client) {
+-		TAILQ_REMOVE(&telemetry->client_list_head, client, client_list);
+-		ret = rte_telemetry_client_cleanup(client);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Client cleanup failed");
+-			return -EPERM;
+-		}
+-	}
+-
+-	ret = close(telemetry->server_fd);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Close TELEMETRY socket failed");
+-		free(telemetry);
+-		return -EPERM;
+-	}
+-
+-	telemetry->thread_status = 0;
+-	pthread_join(telemetry->thread_id, NULL);
+-	free(telemetry);
+-	static_telemetry = NULL;
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_unregister_client(struct telemetry_impl *telemetry,
+-	const char *client_path)
+-{
+-	int ret;
+-	telemetry_client *client, *temp_client;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_WARN("TELEMETRY is not initialised");
+-		return -ENODEV;
+-	}
+-
+-	if (client_path == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid client path");
+-		goto einval_fail;
+-	}
+-
+-	if (TAILQ_EMPTY(&telemetry->client_list_head)) {
+-		TELEMETRY_LOG_ERR("There are no clients currently registered");
+-		return -EPERM;
+-	}
+-
+-	TAILQ_FOREACH_SAFE(client, &telemetry->client_list_head, client_list,
+-			temp_client) {
+-		if (strcmp(client_path, client->file_path) == 0) {
+-			TAILQ_REMOVE(&telemetry->client_list_head, client,
+-				client_list);
+-			ret = rte_telemetry_client_cleanup(client);
+-
+-			if (ret < 0) {
+-				TELEMETRY_LOG_ERR("Client cleanup failed");
+-				return -EPERM;
+-			}
+-
+-			return 0;
+-		}
+-	}
+-
+-	TELEMETRY_LOG_WARN("Couldn't find client, possibly not registered yet.");
+-	return -1;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -EINVAL;
+-}
+-
+-int32_t
+-rte_telemetry_register_client(struct telemetry_impl *telemetry,
+-	const char *client_path)
+-{
+-	int ret, fd;
+-	struct sockaddr_un addrs;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Could not initialize TELEMETRY API");
+-		return -ENODEV;
+-	}
+-
+-	if (client_path == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid client path");
+-		return -EINVAL;
+-	}
+-
+-	telemetry_client *client;
+-	TAILQ_FOREACH(client, &telemetry->client_list_head, client_list) {
+-		if (strcmp(client_path, client->file_path) == 0) {
+-			TELEMETRY_LOG_WARN("'%s' already registered",
+-					client_path);
+-			return -EINVAL;
+-		}
+-	}
+-
+-	fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+-	if (fd == -1) {
+-		TELEMETRY_LOG_ERR("Client socket error");
+-		return -EACCES;
+-	}
+-
+-	ret = rte_telemetry_set_socket_nonblock(fd);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not set socket to NONBLOCK");
+-		return -EPERM;
+-	}
+-
+-	addrs.sun_family = AF_UNIX;
+-	strlcpy(addrs.sun_path, client_path, sizeof(addrs.sun_path));
+-	telemetry_client *new_client = malloc(sizeof(telemetry_client));
+-	new_client->file_path = strdup(client_path);
+-	new_client->fd = fd;
+-
+-	if (connect(fd, (struct sockaddr *)&addrs, sizeof(addrs)) == -1) {
+-		TELEMETRY_LOG_ERR("TELEMETRY client connect to %s didn't work",
+-				client_path);
+-		ret = rte_telemetry_client_cleanup(new_client);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Client cleanup failed");
+-			return -EPERM;
+-		}
+-		return -EINVAL;
+-	}
+-
+-	TAILQ_INSERT_HEAD(&telemetry->client_list_head, new_client, client_list);
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_parse_client_message(struct telemetry_impl *telemetry, char *buf)
+-{
+-	int ret, action_int;
+-	json_error_t error;
+-	json_t *root = json_loads(buf, 0, &error);
+-
+-	if (root == NULL) {
+-		TELEMETRY_LOG_WARN("Could not load JSON object from data passed in : %s",
+-				error.text);
+-		goto fail;
+-	} else if (!json_is_object(root)) {
+-		TELEMETRY_LOG_WARN("JSON Request is not a JSON object");
+-		goto fail;
+-	}
+-
+-	json_t *action = json_object_get(root, "action");
+-	if (action == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have action field");
+-		goto fail;
+-	} else if (!json_is_integer(action)) {
+-		TELEMETRY_LOG_WARN("Action value is not an integer");
+-		goto fail;
+-	}
+-
+-	json_t *command = json_object_get(root, "command");
+-	if (command == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have command field");
+-		goto fail;
+-	} else if (!json_is_string(command)) {
+-		TELEMETRY_LOG_WARN("Command value is not a string");
+-		goto fail;
+-	}
+-
+-	action_int = json_integer_value(action);
+-	if (action_int != ACTION_POST) {
+-		TELEMETRY_LOG_WARN("Invalid action code");
+-		goto fail;
+-	}
+-
+-	if (strcmp(json_string_value(command), "clients") != 0) {
+-		TELEMETRY_LOG_WARN("Invalid command");
+-		goto fail;
+-	}
+-
+-	json_t *data = json_object_get(root, "data");
+-	if (data == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have data field");
+-		goto fail;
+-	}
+-
+-	json_t *client_path = json_object_get(data, "client_path");
+-	if (client_path == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have client_path field");
+-		goto fail;
+-	}
+-
+-	if (!json_is_string(client_path)) {
+-		TELEMETRY_LOG_WARN("Client_path value is not a string");
+-		goto fail;
+-	}
+-
+-	ret = rte_telemetry_register_client(telemetry,
+-			json_string_value(client_path));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not register client");
+-		telemetry->register_fail_count++;
+-		goto fail;
+-	}
+-
+-	return 0;
+-
+-fail:
+-	TELEMETRY_LOG_WARN("Client attempted to register with invalid message");
+-	json_decref(root);
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_dummy_client_socket(const char *valid_client_path)
+-{
+-	int sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+-	struct sockaddr_un addr = {0};
+-
+-	if (sockfd < 0) {
+-		TELEMETRY_LOG_ERR("Test socket creation failure");
+-		return -1;
+-	}
+-
+-	addr.sun_family = AF_UNIX;
+-	strlcpy(addr.sun_path, valid_client_path, sizeof(addr.sun_path));
+-	unlink(valid_client_path);
+-
+-	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+-		TELEMETRY_LOG_ERR("Test socket binding failure");
+-		return -1;
+-	}
+-
+-	if (listen(sockfd, 1) < 0) {
+-		TELEMETRY_LOG_ERR("Listen failure");
+-		return -1;
+-	}
+-
+-	return sockfd;
+-}
+-
+-int32_t
+-rte_telemetry_selftest(void)
+-{
+-	const char *invalid_client_path = SELFTEST_INVALID_CLIENT;
+-	const char *valid_client_path = SELFTEST_VALID_CLIENT;
+-	int ret, sockfd;
+-
+-	TELEMETRY_LOG_INFO("Selftest");
+-
+-	ret = rte_telemetry_init();
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Valid initialisation test failed");
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Valid initialisation test passed");
+-
+-	ret = rte_telemetry_init();
+-	if (ret != -EALREADY) {
+-		TELEMETRY_LOG_ERR("Invalid initialisation test failed");
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Invalid initialisation test passed");
+-
+-	ret = rte_telemetry_unregister_client(static_telemetry,
+-			invalid_client_path);
+-	if (ret != -EPERM) {
+-		TELEMETRY_LOG_ERR("Invalid unregister test failed");
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Invalid unregister test passed");
+-
+-	sockfd = rte_telemetry_dummy_client_socket(valid_client_path);
+-	if (sockfd < 0) {
+-		TELEMETRY_LOG_ERR("Test socket creation failed");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_register_client(static_telemetry, valid_client_path);
+-	if (ret != 0) {
+-		TELEMETRY_LOG_ERR("Valid register test failed: %i", ret);
+-		return -1;
+-	}
+-
+-	accept(sockfd, NULL, NULL);
+-	TELEMETRY_LOG_INFO("Success - Valid register test passed");
+-
+-	ret = rte_telemetry_register_client(static_telemetry, valid_client_path);
+-	if (ret != -EINVAL) {
+-		TELEMETRY_LOG_ERR("Invalid register test failed: %i", ret);
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Invalid register test passed");
+-
+-	ret = rte_telemetry_unregister_client(static_telemetry,
+-		invalid_client_path);
+-	if (ret != -1) {
+-		TELEMETRY_LOG_ERR("Invalid unregister test failed: %i", ret);
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Invalid unregister test passed");
+-
+-	ret = rte_telemetry_unregister_client(static_telemetry, valid_client_path);
+-	if (ret != 0) {
+-		TELEMETRY_LOG_ERR("Valid unregister test failed: %i", ret);
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Valid unregister test passed");
+-
+-	ret = rte_telemetry_cleanup();
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Cleanup test failed");
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Valid cleanup test passed");
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_socket_messaging_testing(int index, int socket)
+-{
+-	struct telemetry_impl *telemetry = calloc(1, sizeof(telemetry_impl));
+-	int fd, bad_send_fd, send_fd, bad_fd, bad_recv_fd, recv_fd, ret;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Could not initialize Telemetry API");
+-		return -1;
+-	}
+-
+-	telemetry->server_fd = socket;
+-	telemetry->reg_index[0] = index;
+-	TELEMETRY_LOG_INFO("Beginning Telemetry socket message Selftest");
+-	rte_telemetry_socket_test_setup(telemetry, &send_fd, &recv_fd);
+-	TELEMETRY_LOG_INFO("Register valid client test");
+-
+-	ret = rte_telemetry_socket_register_test(telemetry, &fd, send_fd,
+-		recv_fd);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Register valid client test failed!");
+-		free(telemetry);
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Register valid client test passed!");
+-
+-	TELEMETRY_LOG_INFO("Register invalid/same client test");
+-	ret = rte_telemetry_socket_test_setup(telemetry, &bad_send_fd,
+-		&bad_recv_fd);
+-	ret = rte_telemetry_socket_register_test(telemetry, &bad_fd,
+-		bad_send_fd, bad_recv_fd);
+-	if (!ret) {
+-		TELEMETRY_LOG_ERR("Register invalid/same client test failed!");
+-		free(telemetry);
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - Register invalid/same client test passed!");
+-
+-	ret = rte_telemetry_json_socket_message_test(telemetry, fd);
+-	if (ret < 0) {
+-		free(telemetry);
+-		return -1;
+-	}
+-
+-	free(telemetry);
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_socket_register_test(struct telemetry_impl *telemetry, int *fd,
+-	int send_fd, int recv_fd)
+-{
+-	int ret;
+-	char good_req_string[BUF_SIZE];
+-
+-	snprintf(good_req_string, sizeof(good_req_string),
+-	"{\"action\":1,\"command\":\"clients\",\"data\":{\"client_path\""
+-		":\"%s\"}}", SOCKET_TEST_CLIENT_PATH);
+-
+-	listen(recv_fd, 1);
+-
+-	ret = send(send_fd, good_req_string, strlen(good_req_string), 0);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not send message over socket");
+-		return -1;
+-	}
+-
+-	rte_telemetry_run(telemetry);
+-
+-	if (telemetry->register_fail_count != 0)
+-		return -1;
+-
+-	*fd = accept(recv_fd, NULL, NULL);
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_socket_test_setup(struct telemetry_impl *telemetry, int *send_fd,
+-	int *recv_fd)
+-{
+-	int ret;
+-	const char *client_path = SOCKET_TEST_CLIENT_PATH;
+-	char socket_path[BUF_SIZE];
+-	struct sockaddr_un addr = {0};
+-	struct sockaddr_un addrs = {0};
+-	*send_fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+-	*recv_fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+-
+-	listen(telemetry->server_fd, 5);
+-	addr.sun_family = AF_UNIX;
+-	rte_telemetry_get_runtime_dir(socket_path, sizeof(socket_path));
+-	strlcpy(addr.sun_path, socket_path, sizeof(addr.sun_path));
+-
+-	ret = connect(*send_fd, (struct sockaddr *) &addr, sizeof(addr));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not connect socket");
+-		return -1;
+-	}
+-
+-	telemetry->accept_fd = accept(telemetry->server_fd, NULL, NULL);
+-
+-	addrs.sun_family = AF_UNIX;
+-	strlcpy(addrs.sun_path, client_path, sizeof(addrs.sun_path));
+-	unlink(client_path);
+-
+-	ret = bind(*recv_fd, (struct sockaddr *)&addrs, sizeof(addrs));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not bind socket");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_stat_parse(char *buf, struct json_data *json_data_struct)
+-{
+-	json_error_t error;
+-	json_t *root = json_loads(buf, 0, &error);
+-	int arraylen, i;
+-	json_t *status, *dataArray, *port, *stats, *name, *value, *dataArrayObj,
+-	       *statsArrayObj;
+-
+-	stats = NULL;
+-	port = NULL;
+-	name = NULL;
+-
+-	if (buf == NULL) {
+-		TELEMETRY_LOG_ERR("JSON message is NULL");
+-		return -EINVAL;
+-	}
+-
+-	if (root == NULL) {
+-		TELEMETRY_LOG_ERR("Could not load JSON object from data passed in : %s",
+-				error.text);
+-		return -EPERM;
+-	} else if (!json_is_object(root)) {
+-		TELEMETRY_LOG_ERR("JSON Request is not a JSON object");
+-		json_decref(root);
+-		return -EINVAL;
+-	}
+-
+-	status = json_object_get(root, "status_code");
+-	if (!status) {
+-		TELEMETRY_LOG_ERR("Request does not have status field");
+-		return -EINVAL;
+-	} else if (!json_is_string(status)) {
+-		TELEMETRY_LOG_ERR("Status value is not a string");
+-		return -EINVAL;
+-	}
+-
+-	json_data_struct->status_code = strdup(json_string_value(status));
+-
+-	dataArray = json_object_get(root, "data");
+-	if (dataArray == NULL) {
+-		TELEMETRY_LOG_ERR("Request does not have data field");
+-		return -EINVAL;
+-	}
+-
+-	arraylen = json_array_size(dataArray);
+-	if (arraylen == 0) {
+-		json_data_struct->data = "null";
+-		return -EINVAL;
+-	}
+-
+-	for (i = 0; i < arraylen; i++) {
+-		dataArrayObj = json_array_get(dataArray, i);
+-		port = json_object_get(dataArrayObj, "port");
+-		stats = json_object_get(dataArrayObj, "stats");
+-	}
+-
+-	if (port == NULL) {
+-		TELEMETRY_LOG_ERR("Request does not have port field");
+-		return -EINVAL;
+-	}
+-
+-	if (!json_is_integer(port)) {
+-		TELEMETRY_LOG_ERR("Port value is not an integer");
+-		return -EINVAL;
+-	}
+-
+-	json_data_struct->port = json_integer_value(port);
+-
+-	if (stats == NULL) {
+-		TELEMETRY_LOG_ERR("Request does not have stats field");
+-		return -EINVAL;
+-	}
+-
+-	arraylen = json_array_size(stats);
+-	for (i = 0; i < arraylen; i++) {
+-		statsArrayObj = json_array_get(stats, i);
+-		name = json_object_get(statsArrayObj, "name");
+-		value = json_object_get(statsArrayObj, "value");
+-	}
+-
+-	if (name == NULL) {
+-		TELEMETRY_LOG_ERR("Request does not have name field");
+-		return -EINVAL;
+-	}
+-
+-	if (!json_is_string(name)) {
+-		TELEMETRY_LOG_ERR("Stat name value is not a string");
+-		return -EINVAL;
+-	}
+-
+-	json_data_struct->stat_name = strdup(json_string_value(name));
+-
+-	if (value == NULL) {
+-		TELEMETRY_LOG_ERR("Request does not have value field");
+-		return -EINVAL;
+-	}
+-
+-	if (!json_is_integer(value)) {
+-		TELEMETRY_LOG_ERR("Stat value is not an integer");
+-		return -EINVAL;
+-	}
+-
+-	json_data_struct->stat_value = json_integer_value(value);
+-
+-	return 0;
+-}
+-
+-static void
+-rte_telemetry_free_test_data(struct json_data *data)
+-{
+-	free(data->status_code);
+-	free(data->stat_name);
+-	free(data);
+-}
+-
+-int32_t
+-rte_telemetry_valid_json_test(struct telemetry_impl *telemetry, int fd)
+-{
+-	int ret;
+-	int port = 0;
+-	int value = 0;
+-	int fail_count = 0;
+-	int buffer_read = 0;
+-	char buf[BUF_SIZE];
+-	struct json_data *data_struct;
+-	errno = 0;
+-	const char *status = "Status OK: 200";
+-	const char *name = "rx_good_packets";
+-	const char *valid_json_message = "{\"action\":0,\"command\":"
+-	"\"ports_stats_values_by_name\",\"data\":{\"ports\""
+-	":[0],\"stats\":[\"rx_good_packets\"]}}";
+-
+-	ret = send(fd, valid_json_message, strlen(valid_json_message), 0);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not send message over socket");
+-		return -1;
+-	}
+-
+-	rte_telemetry_run(telemetry);
+-	buffer_read = recv(fd, buf, BUF_SIZE-1, 0);
+-
+-	if (buffer_read == -1) {
+-		TELEMETRY_LOG_ERR("Read error");
+-		return -1;
+-	}
+-
+-	buf[buffer_read] = '\0';
+-	data_struct = calloc(1, sizeof(struct json_data));
+-	ret = rte_telemetry_stat_parse(buf, data_struct);
+-
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not parse stats");
+-		fail_count++;
+-	}
+-
+-	if (strcmp(data_struct->status_code, status) != 0) {
+-		TELEMETRY_LOG_ERR("Status code is invalid");
+-		fail_count++;
+-	}
+-
+-	if (data_struct->port != port) {
+-		TELEMETRY_LOG_ERR("Port is invalid");
+-		fail_count++;
+-	}
+-
+-	if (strcmp(data_struct->stat_name, name) != 0) {
+-		TELEMETRY_LOG_ERR("Stat name is invalid");
+-		fail_count++;
+-	}
+-
+-	if (data_struct->stat_value != value) {
+-		TELEMETRY_LOG_ERR("Stat value is invalid");
+-		fail_count++;
+-	}
+-
+-	rte_telemetry_free_test_data(data_struct);
+-	if (fail_count > 0)
+-		return -1;
+-
+-	TELEMETRY_LOG_INFO("Success - Passed valid JSON message test passed");
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_invalid_json_test(struct telemetry_impl *telemetry, int fd)
+-{
+-	int ret;
+-	char buf[BUF_SIZE];
+-	int fail_count = 0;
+-	const char *invalid_json = "{]";
+-	const char *status = "Status Error: Unknown";
+-	const char *data = "null";
+-	struct json_data *data_struct;
+-	int buffer_read = 0;
+-	errno = 0;
+-
+-	ret = send(fd, invalid_json, strlen(invalid_json), 0);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not send message over socket");
+-		return -1;
+-	}
+-
+-	rte_telemetry_run(telemetry);
+-	buffer_read = recv(fd, buf, BUF_SIZE-1, 0);
+-
+-	if (buffer_read == -1) {
+-		TELEMETRY_LOG_ERR("Read error");
+-		return -1;
+-	}
+-
+-	buf[buffer_read] = '\0';
+-
+-	data_struct = calloc(1, sizeof(struct json_data));
+-	ret = rte_telemetry_stat_parse(buf, data_struct);
+-
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not parse stats");
+-
+-	if (strcmp(data_struct->status_code, status) != 0) {
+-		TELEMETRY_LOG_ERR("Status code is invalid");
+-		fail_count++;
+-	}
+-
+-	if (strcmp(data_struct->data, data) != 0) {
+-		TELEMETRY_LOG_ERR("Data status is invalid");
+-		fail_count++;
+-	}
+-
+-	rte_telemetry_free_test_data(data_struct);
+-	if (fail_count > 0)
+-		return -1;
+-
+-	TELEMETRY_LOG_INFO("Success - Passed invalid JSON message test");
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_json_contents_test(struct telemetry_impl *telemetry, int fd)
+-{
+-	int ret;
+-	char buf[BUF_SIZE];
+-	int fail_count = 0;
+-	const char *status = "Status Error: Invalid Argument 404";
+-	const char *data = "null";
+-	struct json_data *data_struct;
+-	const char *invalid_contents = "{\"action\":0,\"command\":"
+-	"\"ports_stats_values_by_name\",\"data\":{\"ports\""
+-	":[0],\"stats\":[\"some_invalid_param\","
+-	"\"another_invalid_param\"]}}";
+-	int buffer_read = 0;
+-	errno = 0;
+-
+-	ret = send(fd, invalid_contents, strlen(invalid_contents), 0);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not send message over socket");
+-		return -1;
+-	}
+-
+-	rte_telemetry_run(telemetry);
+-	buffer_read = recv(fd, buf, BUF_SIZE-1, 0);
+-
+-	if (buffer_read == -1) {
+-		TELEMETRY_LOG_ERR("Read error");
+-		return -1;
+-	}
+-
+-	buf[buffer_read] = '\0';
+-	data_struct = calloc(1, sizeof(struct json_data));
+-	ret = rte_telemetry_stat_parse(buf, data_struct);
+-
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not parse stats");
+-
+-	if (strcmp(data_struct->status_code, status) != 0) {
+-		TELEMETRY_LOG_ERR("Status code is invalid");
+-		fail_count++;
+-	}
+-
+-	if (strcmp(data_struct->data, data) != 0) {
+-		TELEMETRY_LOG_ERR("Data status is invalid");
+-		fail_count++;
+-	}
+-
+-	rte_telemetry_free_test_data(data_struct);
+-	if (fail_count > 0)
+-		return -1;
+-
+-	TELEMETRY_LOG_INFO("Success - Passed invalid JSON content test");
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_json_empty_test(struct telemetry_impl *telemetry, int fd)
+-{
+-	int ret;
+-	char buf[BUF_SIZE];
+-	int fail_count = 0;
+-	const char *status = "Status Error: Invalid Argument 404";
+-	const char *data = "null";
+-	struct json_data *data_struct;
+-	const char *empty_json  = "{}";
+-	int buffer_read = 0;
+-	errno = 0;
+-
+-	ret = (send(fd, empty_json, strlen(empty_json), 0));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not send message over socket");
+-		return -1;
+-	}
+-
+-	rte_telemetry_run(telemetry);
+-	buffer_read = recv(fd, buf, BUF_SIZE-1, 0);
+-
+-	if (buffer_read == -1) {
+-		TELEMETRY_LOG_ERR("Read error");
+-		return -1;
+-	}
+-
+-	buf[buffer_read] = '\0';
+-	data_struct = calloc(1, sizeof(struct json_data));
+-	ret = rte_telemetry_stat_parse(buf, data_struct);
+-
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not parse stats");
+-
+-	if (strcmp(data_struct->status_code, status) != 0) {
+-		TELEMETRY_LOG_ERR("Status code is invalid");
+-		fail_count++;
+-	}
+-
+-	if (strcmp(data_struct->data, data) != 0) {
+-		TELEMETRY_LOG_ERR("Data status is invalid");
+-		fail_count++;
+-	}
+-
+-	rte_telemetry_free_test_data(data_struct);
+-
+-	if (fail_count > 0)
+-		return -1;
+-
+-	TELEMETRY_LOG_INFO("Success - Passed JSON empty message test");
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_json_socket_message_test(struct telemetry_impl *telemetry, int fd)
+-{
+-	uint16_t i;
+-	int ret, fail_count;
+-
+-	fail_count = 0;
+-	struct telemetry_message_test socket_json_tests[] = {
+-		{.test_name = "Invalid JSON test",
+-			.test_func_ptr = rte_telemetry_invalid_json_test},
+-		{.test_name = "Valid JSON test",
+-			.test_func_ptr = rte_telemetry_valid_json_test},
+-		{.test_name = "JSON contents test",
+-			.test_func_ptr = rte_telemetry_json_contents_test},
+-		{.test_name = "JSON empty tests",
+-			.test_func_ptr = rte_telemetry_json_empty_test}
+-		};
+-
+-#define NUM_TESTS RTE_DIM(socket_json_tests)
+-
+-	for (i = 0; i < NUM_TESTS; i++) {
+-		TELEMETRY_LOG_INFO("%s", socket_json_tests[i].test_name);
+-		ret = (socket_json_tests[i].test_func_ptr)
+-			(telemetry, fd);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("%s failed",
+-					socket_json_tests[i].test_name);
+-			fail_count++;
+-		}
+-	}
+-
+-	if (fail_count > 0) {
+-		TELEMETRY_LOG_ERR("Failed %i JSON socket message test(s)",
+-				fail_count);
+-		return -1;
+-	}
+-
+-	TELEMETRY_LOG_INFO("Success - All JSON tests passed");
+-
+-	return 0;
+-}
+-
+-int telemetry_log_level;
+-
+-static struct rte_option option = {
+-	.name = "telemetry",
+-	.usage = "Enable telemetry backend",
+-	.cb = &rte_telemetry_init,
+-	.enabled = 0
+-};
+-
+-RTE_INIT(rte_telemetry_register)
+-{
+-	telemetry_log_level = rte_log_register("lib.telemetry");
+-	if (telemetry_log_level >= 0)
+-		rte_log_set_level(telemetry_log_level, RTE_LOG_ERR);
+-
+-	rte_option_register(&option);
+-}
+diff --git a/lib/librte_telemetry/rte_telemetry.h b/lib/librte_telemetry/rte_telemetry.h
+index aedb318..eb7f2c9 100644
+--- a/lib/librte_telemetry/rte_telemetry.h
++++ b/lib/librte_telemetry/rte_telemetry.h
+@@ -3,67 +3,263 @@
+  */
+ 
+ #include <stdint.h>
++#include <rte_compat.h>
+ 
+ #ifndef _RTE_TELEMETRY_H_
+ #define _RTE_TELEMETRY_H_
+ 
++/** Maximum number of telemetry callbacks. */
++#define TELEMETRY_MAX_CALLBACKS 64
++/** Maximum length for string used in object. */
++#define RTE_TEL_MAX_STRING_LEN 64
++/** Maximum length of string. */
++#define RTE_TEL_MAX_SINGLE_STRING_LEN 8192
++/** Maximum number of dictionary entries. */
++#define RTE_TEL_MAX_DICT_ENTRIES 256
++/** Maximum number of array entries. */
++#define RTE_TEL_MAX_ARRAY_ENTRIES 512
++
+ /**
++ * @warning
++ * @b EXPERIMENTAL: all functions in this file may change without prior notice
++ *
+  * @file
+  * RTE Telemetry
+  *
+  * The telemetry library provides a method to retrieve statistics from
+- * DPDK by sending a JSON encoded message over a socket. DPDK will send
++ * DPDK by sending a request message over a socket. DPDK will send
+  * a JSON encoded response containing telemetry data.
+  ***/
+ 
++/** opaque structure used internally for managing data from callbacks */
++struct rte_tel_data;
++
+ /**
+- * @warning
+- * @b EXPERIMENTAL: this API may change without prior notice
++ * The types of data that can be managed in arrays or dicts.
++ * For arrays, this must be specified at creation time, while for
++ * dicts this is specified implicitly each time an element is added
++ * via calling a type-specific function.
++ */
++enum rte_tel_value_type {
++	RTE_TEL_STRING_VAL, /** a string value */
++	RTE_TEL_INT_VAL,    /** a signed 32-bit int value */
++	RTE_TEL_U64_VAL,    /** an unsigned 64-bit int value */
++};
++
++/**
++ * Start an array of the specified type for returning from a callback
+  *
+- * Initialize Telemetry
++ * @param d
++ *   The data structure passed to the callback
++ * @param type
++ *   The type of the array of data
++ * @return
++ *   0 on success, negative errno on error
++ */
++__rte_experimental
++int
++rte_tel_data_start_array(struct rte_tel_data *d, enum rte_tel_value_type type);
++
++/**
++ * Start a dictionary of values for returning from a callback
+  *
++ * @param d
++ *   The data structure passed to the callback
+  * @return
+- *  0 on successful initialisation.
++ *   0 on success, negative errno on error
++ */
++__rte_experimental
++int
++rte_tel_data_start_dict(struct rte_tel_data *d);
++
++/**
++ * Set a string for returning from a callback
++ *
++ * @param d
++ *   The data structure passed to the callback
++ * @param str
++ *   The string to be returned in the data structure
+  * @return
+- *  -ENOMEM on memory allocation error
++ *   0 on success, negative errno on error, E2BIG on string truncation
++ */
++__rte_experimental
++int
++rte_tel_data_string(struct rte_tel_data *d, const char *str);
++
++/**
++ * Add a string to an array.
++ * The array must have been started by rte_tel_data_start_array() with
++ * RTE_TEL_STRING_VAL as the type parameter.
++ *
++ * @param d
++ *   The data structure passed to the callback
++ * @param str
++ *   The string to be returned in the array
+  * @return
+- *  -EPERM on unknown error failure
++ *   0 on success, negative errno on error, E2BIG on string truncation
++ */
++__rte_experimental
++int
++rte_tel_data_add_array_string(struct rte_tel_data *d, const char *str);
++
++/**
++ * Add an int to an array.
++ * The array must have been started by rte_tel_data_start_array() with
++ * RTE_TEL_INT_VAL as the type parameter.
++ *
++ * @param d
++ *   The data structure passed to the callback
++ * @param x
++ *   The number to be returned in the array
+  * @return
+- *  -EALREADY if Telemetry is already initialised.
++ *   0 on success, negative errno on error
+  */
+ __rte_experimental
+-int32_t
+-rte_telemetry_init(void);
++int
++rte_tel_data_add_array_int(struct rte_tel_data *d, int x);
+ 
+ /**
+- * @warning
+- * @b EXPERIMENTAL: this API may change without prior notice
++ * Add a uint64_t to an array.
++ * The array must have been started by rte_tel_data_start_array() with
++ * RTE_TEL_U64_VAL as the type parameter.
+  *
+- * Clean up and free memory.
++ * @param d
++ *   The data structure passed to the callback
++ * @param x
++ *   The number to be returned in the array
++ * @return
++ *   0 on success, negative errno on error
++ */
++__rte_experimental
++int
++rte_tel_data_add_array_u64(struct rte_tel_data *d, uint64_t x);
++
++/**
++ * Add a string value to a dictionary.
++ * The dict must have been started by rte_tel_data_start_dict().
+  *
++ * @param d
++ *   The data structure passed to the callback
++ * @param name
++ *   The name the value is to be stored under in the dict
++ * @param val
++ *   The string to be stored in the dict
+  * @return
+- *  0 on success
++ *   0 on success, negative errno on error, E2BIG on string truncation of
++ *   either name or value.
++ */
++__rte_experimental
++int
++rte_tel_data_add_dict_string(struct rte_tel_data *d, const char *name,
++		const char *val);
++
++/**
++ * Add an int value to a dictionary.
++ * The dict must have been started by rte_tel_data_start_dict().
++ *
++ * @param d
++ *   The data structure passed to the callback
++ * @param name
++ *   The name the value is to be stored under in the dict
++ * @param val
++ *   The number to be stored in the dict
+  * @return
+- *  -EPERM on failure
++ *   0 on success, negative errno on error, E2BIG on string truncation of name.
+  */
+ __rte_experimental
+-int32_t
+-rte_telemetry_cleanup(void);
++int
++rte_tel_data_add_dict_int(struct rte_tel_data *d, const char *name, int val);
+ 
+ /**
+- * @warning
+- * @b EXPERIMENTAL: this API may change without prior notice
++ * Add a uint64_t value to a dictionary.
++ * The dict must have been started by rte_tel_data_start_dict().
++ *
++ * @param d
++ *   The data structure passed to the callback
++ * @param name
++ *   The name the value is to be stored under in the dict
++ * @param val
++ *   The number to be stored in the dict
++ * @return
++ *   0 on success, negative errno on error, E2BIG on string truncation of name.
++ */
++__rte_experimental
++int
++rte_tel_data_add_dict_u64(struct rte_tel_data *d,
++		const char *name, uint64_t val);
++
++/**
++ * This telemetry callback is used when registering a telemetry command.
++ * It handles getting and formatting information to be returned to telemetry
++ * when requested.
++ *
++ * @param cmd
++ * The cmd that was requested by the client.
++ * @param params
++ * Contains data required by the callback function.
++ * @param info
++ * The information to be returned to the caller.
++ *
++ * @return
++ * Length of buffer used on success.
++ * @return
++ * Negative integer on error.
++ */
++typedef int (*telemetry_cb)(const char *cmd, const char *params,
++		struct rte_tel_data *info);
++
++/**
++ * Used for handling data received over a telemetry socket.
++ *
++ * @param sock_id
++ * ID for the socket to be used by the handler.
++ *
++ * @return
++ * Void.
++ */
++typedef void * (*handler)(void *sock_id);
++
++/**
++ * Used when registering a command and callback function with telemetry.
++ *
++ * @param cmd
++ * The command to register with telemetry.
++ * @param fn
++ * Callback function to be called when the command is requested.
++ * @param help
++ * Help text for the command.
++ *
++ * @return
++ *  0 on success.
++ * @return
++ *  -EINVAL for invalid parameters failure.
++ *  @return
++ *  -ENOENT if max callbacks limit has been reached.
++ */
++__rte_experimental
++int
++rte_telemetry_register_cmd(const char *cmd, telemetry_cb fn, const char *help);
++
++/**
++ * @internal
++ * Initialize Telemetry.
+  *
+- * Runs various tests to ensure telemetry initialisation and register/unregister
+- * functions are working correctly.
++ * @param runtime_dir
++ * The runtime directory of DPDK.
++ * @param cpuset
++ * The CPU set to be used for setting the thread affinity.
++ * @param err_str
++ * This err_str pointer should point to NULL on entry. In the case of an error
++ * or warning, it will be non-NULL on exit.
+  *
+  * @return
+- *  0 on success when all tests have passed
++ *  0 on success.
+  * @return
+- *  -1 on failure when the test has failed
++ *  -1 on failure.
+  */
+ __rte_experimental
+-int32_t
+-rte_telemetry_selftest(void);
++int
++rte_telemetry_init(const char *runtime_dir, rte_cpuset_t *cpuset,
++		const char **err_str);
+ 
+ #endif
+diff --git a/lib/librte_telemetry/rte_telemetry_internal.h b/lib/librte_telemetry/rte_telemetry_internal.h
+deleted file mode 100644
+index 3f8dbc2..0000000
+--- a/lib/librte_telemetry/rte_telemetry_internal.h
++++ /dev/null
+@@ -1,112 +0,0 @@
+-/* SPDX-License-Identifier: BSD-3-Clause
+- * Copyright(c) 2018 Intel Corporation
+- */
+-
+-#include <rte_log.h>
+-#include <rte_tailq.h>
+-
+-#ifndef _RTE_TELEMETRY_INTERNAL_H_
+-#define _RTE_TELEMETRY_INTERNAL_H_
+-
+-/* Logging Macros */
+-extern int telemetry_log_level;
+-
+-#define TELEMETRY_LOG(level, fmt, args...) \
+-	rte_log(RTE_LOG_ ##level, telemetry_log_level, "%s(): "fmt "\n", \
+-		__func__, ##args)
+-
+-#define TELEMETRY_LOG_ERR(fmt, args...) \
+-	TELEMETRY_LOG(ERR, fmt, ## args)
+-
+-#define TELEMETRY_LOG_WARN(fmt, args...) \
+-	TELEMETRY_LOG(WARNING, fmt, ## args)
+-
+-#define TELEMETRY_LOG_INFO(fmt, args...) \
+-	TELEMETRY_LOG(INFO, fmt, ## args)
+-
+-#define MAX_METRICS 256
+-
+-typedef struct telemetry_client {
+-	char *file_path;
+-	int fd;
+-	TAILQ_ENTRY(telemetry_client) client_list;
+-} telemetry_client;
+-
+-typedef struct telemetry_impl {
+-	int accept_fd;
+-	int server_fd;
+-	pthread_t thread_id;
+-	int thread_status;
+-	uint32_t socket_id;
+-	int reg_index[RTE_MAX_ETHPORTS];
+-	int metrics_register_done;
+-	TAILQ_HEAD(, telemetry_client) client_list_head;
+-	struct telemetry_client *request_client;
+-	int register_fail_count;
+-} telemetry_impl;
+-
+-enum rte_telemetry_parser_actions {
+-	ACTION_GET = 0,
+-	ACTION_DELETE = 2
+-};
+-
+-enum rte_telemetry_stats_type {
+-	PORT_STATS = 0,
+-	GLOBAL_STATS = 1
+-};
+-
+-/* @internal */
+-struct telemetry_encode_param {
+-	enum rte_telemetry_stats_type type;
+-	union {
+-		struct port_param {
+-			int num_metric_ids;
+-			uint32_t metric_ids[MAX_METRICS];
+-			int num_port_ids;
+-			uint32_t port_ids[RTE_MAX_ETHPORTS];
+-		} pp;
+-		struct global_param {
+-			int num_metric_ids;
+-			uint32_t metric_ids[MAX_METRICS];
+-		} gp;
+-	};
+-};
+-
+-int32_t
+-rte_telemetry_parse_client_message(struct telemetry_impl *telemetry, char *buf);
+-
+-int32_t
+-rte_telemetry_send_error_response(struct telemetry_impl *telemetry,
+-	int error_type);
+-
+-int32_t
+-rte_telemetry_register_client(struct telemetry_impl *telemetry,
+-	const char *client_path);
+-
+-int32_t
+-rte_telemetry_unregister_client(struct telemetry_impl *telemetry,
+-	const char *client_path);
+-
+-/**
+- * This is a wrapper for the ethdev api rte_eth_find_next().
+- * If rte_eth_find_next() returns the same port id that we passed it,
+- * then we know that that port is active.
+- */
+-int32_t
+-rte_telemetry_is_port_active(int port_id);
+-
+-int32_t
+-rte_telemetry_send_ports_stats_values(struct telemetry_encode_param *ep,
+-	struct telemetry_impl *telemetry);
+-
+-int32_t
+-rte_telemetry_socket_messaging_testing(int index, int socket);
+-
+-int32_t
+-rte_telemetry_send_global_stats_values(struct telemetry_encode_param *ep,
+-	struct telemetry_impl *telemetry);
+-
+-int32_t
+-rte_telemetry_parser_test(struct telemetry_impl *telemetry);
+-
+-#endif
+diff --git a/lib/librte_telemetry/rte_telemetry_legacy.h b/lib/librte_telemetry/rte_telemetry_legacy.h
+new file mode 100644
+index 0000000..c83f9a8
+--- /dev/null
++++ b/lib/librte_telemetry/rte_telemetry_legacy.h
+@@ -0,0 +1,87 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#ifndef _RTE_TELEMETRY_LEGACY_H_
++#define _RTE_TELEMETRY_LEGACY_H_
++
++#include <rte_compat.h>
++#include "rte_telemetry.h"
++
++/**
++ * @internal
++ * @warning
++ * @b EXPERIMENTAL: this API may change without prior notice
++
++ * @file
++ * RTE Telemetry Legacy
++ *
++ ***/
++
++/**
++ * @internal
++ * Value representing if data is required for the command
++ */
++enum rte_telemetry_legacy_data_req {
++	DATA_NOT_REQ = 0,
++	DATA_REQ
++};
++
++/**
++ * This telemetry callback is used when registering a legacy telemetry command.
++ * It handles getting and formatting stats to be returned to telemetry when
++ * requested. Stats up to buf_len in length are put in the buffer.
++ *
++ * @param cmd
++ * The cmd that was requested by the client.
++ * @param params
++ * Contains data required by the callback function.
++ * @param buffer
++ * A buffer to hold the formatted response.
++ * @param buf_len
++ * Length of the buffer.
++ *
++ * @return
++ * Length of buffer used on success.
++ * @return
++ * Negative integer on error.
++ */
++typedef int (*telemetry_legacy_cb)(const char *cmd, const char *params,
++		char *buffer, int buf_len);
++
++/**
++ * @internal
++ * Counter for the number of registered legacy callbacks
++ */
++extern int num_legacy_callbacks;
++
++/**
++ * @internal
++ * Used for handling data received over the legacy telemetry socket.
++ *
++ * @return
++ * Void.
++ */
++void *
++legacy_client_handler(void *sock_id);
++
++/**
++ * @internal
++ *
++ * Used when registering a command and callback function with
++ * telemetry legacy support.
++ *
++ * @return
++ *  0 on success.
++ * @return
++ *  -EINVAL for invalid parameters failure.
++ *  @return
++ *  -ENOENT if max callbacks limit has been reached.
++ */
++__rte_experimental
++int
++rte_telemetry_legacy_register(const char *cmd,
++		enum rte_telemetry_legacy_data_req data_req,
++		telemetry_legacy_cb fn);
++
++#endif
+diff --git a/lib/librte_telemetry/rte_telemetry_parser.c b/lib/librte_telemetry/rte_telemetry_parser.c
+deleted file mode 100644
+index 9601323..0000000
+--- a/lib/librte_telemetry/rte_telemetry_parser.c
++++ /dev/null
+@@ -1,682 +0,0 @@
+-/* SPDX-License-Identifier: BSD-3-Clause
+- * Copyright(c) 2018 Intel Corporation
+- */
+-
+-#include <stdio.h>
+-#include <stdint.h>
+-#include <string.h>
+-#include <errno.h>
+-#include <jansson.h>
+-
+-#include <rte_metrics.h>
+-#include <rte_common.h>
+-#include <rte_ethdev.h>
+-
+-#include "rte_telemetry_internal.h"
+-#include "rte_telemetry_parser.h"
+-
+-typedef int (*command_func)(struct telemetry_impl *, int, json_t *);
+-
+-struct rte_telemetry_command {
+-	const char *text;
+-	command_func fn;
+-} command;
+-
+-static int32_t
+-rte_telemetry_command_clients(struct telemetry_impl *telemetry, int action,
+-	json_t *data)
+-{
+-	int ret;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (action != ACTION_DELETE) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		goto einval_fail;
+-	}
+-
+-	if (!json_is_object(data)) {
+-		TELEMETRY_LOG_WARN("Invalid data provided for this command");
+-		goto einval_fail;
+-	}
+-
+-	json_t *client_path = json_object_get(data, "client_path");
+-	if (!json_is_string(client_path)) {
+-		TELEMETRY_LOG_WARN("Command value is not a string");
+-		goto einval_fail;
+-	}
+-
+-	ret = rte_telemetry_unregister_client(telemetry,
+-			json_string_value(client_path));
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not unregister client");
+-		goto einval_fail;
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_command_ports(struct telemetry_impl *telemetry, int action,
+-	json_t *data)
+-{
+-	int ret;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (!json_is_null(data)) {
+-		TELEMETRY_LOG_WARN("Data should be NULL JSON object for 'ports' command");
+-		goto einval_fail;
+-	}
+-
+-	if (action != ACTION_GET) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		goto einval_fail;
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_command_ports_details(struct telemetry_impl *telemetry,
+-	int action, json_t *data)
+-{
+-	json_t *value, *port_ids_json = json_object_get(data, "ports");
+-	uint64_t num_port_ids = json_array_size(port_ids_json);
+-	int ret, port_ids[num_port_ids];
+-	RTE_SET_USED(port_ids);
+-	size_t index;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (action != ACTION_GET) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		goto einval_fail;
+-	}
+-
+-	if (!json_is_object(data)) {
+-		TELEMETRY_LOG_WARN("Invalid data provided for this command");
+-		goto einval_fail;
+-	}
+-
+-	if (!json_is_array(port_ids_json)) {
+-		TELEMETRY_LOG_WARN("Invalid Port ID array");
+-		goto einval_fail;
+-	}
+-
+-	json_array_foreach(port_ids_json, index, value) {
+-		if (!json_is_integer(value)) {
+-			TELEMETRY_LOG_WARN("Port ID given is invalid");
+-			goto einval_fail;
+-		}
+-		port_ids[index] = json_integer_value(value);
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_command_port_stats(struct telemetry_impl *telemetry, int action,
+-	json_t *data)
+-{
+-	int ret;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (!json_is_null(data)) {
+-		TELEMETRY_LOG_WARN("Data should be NULL JSON object for 'port_stats' command");
+-		goto einval_fail;
+-	}
+-
+-	if (action != ACTION_GET) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		goto einval_fail;
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_stat_names_to_ids(struct telemetry_impl *telemetry,
+-	const char * const *stat_names, uint32_t *stat_ids,
+-	uint64_t num_stat_names)
+-{
+-	struct rte_metric_name *names;
+-	int ret, num_metrics;
+-	uint32_t i, k;
+-
+-	if (stat_names == NULL) {
+-		TELEMETRY_LOG_WARN("Invalid stat_names argument");
+-		goto einval_fail;
+-	}
+-
+-	if (num_stat_names <= 0) {
+-		TELEMETRY_LOG_WARN("Invalid num_stat_names argument");
+-		goto einval_fail;
+-	}
+-
+-	num_metrics = rte_metrics_get_names(NULL, 0);
+-	if (num_metrics < 0) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics count");
+-		goto eperm_fail;
+-	} else if (num_metrics == 0) {
+-		TELEMETRY_LOG_WARN("No metrics have been registered");
+-		goto eperm_fail;
+-	}
+-
+-	names = malloc(sizeof(struct rte_metric_name) * num_metrics);
+-	if (names == NULL) {
+-		TELEMETRY_LOG_ERR("Cannot allocate memory for names");
+-
+-		ret = rte_telemetry_send_error_response(telemetry, -ENOMEM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-
+-		return -1;
+-	}
+-
+-	ret = rte_metrics_get_names(names, num_metrics);
+-	if (ret < 0 || ret > num_metrics) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics names");
+-		free(names);
+-		goto eperm_fail;
+-	}
+-
+-	k = 0;
+-	for (i = 0; i < (uint32_t)num_stat_names; i++) {
+-		uint32_t j;
+-		for (j = 0; j < (uint32_t)num_metrics; j++) {
+-			if (strcmp(stat_names[i], names[j].name) == 0) {
+-				stat_ids[k] = j;
+-				k++;
+-				break;
+-			}
+-		}
+-	}
+-
+-	if (k != num_stat_names) {
+-		TELEMETRY_LOG_WARN("Invalid stat names provided");
+-		free(names);
+-		goto einval_fail;
+-	}
+-
+-	free(names);
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-
+-eperm_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_command_ports_all_stat_values(struct telemetry_impl *telemetry,
+-	 int action, json_t *data)
+-{
+-	int ret, num_metrics, i, p;
+-	struct rte_metric_value *values;
+-	uint64_t num_port_ids = 0;
+-	struct telemetry_encode_param ep;
+-
+-	memset(&ep, 0, sizeof(ep));
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (action != ACTION_GET) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	if (json_is_object(data)) {
+-		TELEMETRY_LOG_WARN("Invalid data provided for this command");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	num_metrics = rte_metrics_get_values(0, NULL, 0);
+-	if (num_metrics < 0) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics count");
+-
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-
+-		return -1;
+-	} else if (num_metrics == 0) {
+-		TELEMETRY_LOG_ERR("No metrics to display (none have been registered)");
+-
+-		ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-
+-		return -1;
+-	}
+-
+-	values = malloc(sizeof(struct rte_metric_value) * num_metrics);
+-	if (values == NULL) {
+-		TELEMETRY_LOG_ERR("Cannot allocate memory");
+-		ret = rte_telemetry_send_error_response(telemetry,
+-			 -ENOMEM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	RTE_ETH_FOREACH_DEV(p) {
+-		ep.pp.port_ids[num_port_ids] = p;
+-		num_port_ids++;
+-	}
+-
+-	if (!num_port_ids) {
+-		TELEMETRY_LOG_WARN("No active ports");
+-
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-
+-		goto fail;
+-	}
+-
+-	ret = rte_metrics_get_values(ep.pp.port_ids[0], values, num_metrics);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not get stat values");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		goto fail;
+-	}
+-	for (i = 0; i < num_metrics; i++)
+-		ep.pp.metric_ids[i] = values[i].key;
+-
+-	ep.pp.num_port_ids = num_port_ids;
+-	ep.pp.num_metric_ids = num_metrics;
+-	ep.type = PORT_STATS;
+-
+-	ret = rte_telemetry_send_ports_stats_values(&ep, telemetry);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Sending ports stats values failed");
+-		goto fail;
+-	}
+-
+-	free(values);
+-	return 0;
+-
+-fail:
+-	free(values);
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_command_global_stat_values(struct telemetry_impl *telemetry,
+-	 int action, json_t *data)
+-{
+-	int ret, num_metrics, i;
+-	struct rte_metric_value *values;
+-	struct telemetry_encode_param ep;
+-
+-	memset(&ep, 0, sizeof(ep));
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (action != ACTION_GET) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	if (json_is_object(data)) {
+-		TELEMETRY_LOG_WARN("Invalid data provided for this command");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	num_metrics = rte_metrics_get_values(RTE_METRICS_GLOBAL, NULL, 0);
+-	if (num_metrics < 0) {
+-		TELEMETRY_LOG_ERR("Cannot get metrics count");
+-
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-
+-		return -1;
+-	} else if (num_metrics == 0) {
+-		TELEMETRY_LOG_ERR("No metrics to display (none have been registered)");
+-
+-		ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-
+-		return -1;
+-	}
+-
+-	values = malloc(sizeof(struct rte_metric_value) * num_metrics);
+-	if (values == NULL) {
+-		TELEMETRY_LOG_ERR("Cannot allocate memory");
+-		ret = rte_telemetry_send_error_response(telemetry,
+-			 -ENOMEM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	ret = rte_metrics_get_values(RTE_METRICS_GLOBAL, values, num_metrics);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not get stat values");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		goto fail;
+-	}
+-	for (i = 0; i < num_metrics; i++)
+-		ep.gp.metric_ids[i] = values[i].key;
+-
+-	ep.gp.num_metric_ids = num_metrics;
+-	ep.type = GLOBAL_STATS;
+-
+-	ret = rte_telemetry_send_global_stats_values(&ep, telemetry);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Sending global stats values failed");
+-		goto fail;
+-	}
+-
+-	free(values);
+-	return 0;
+-
+-fail:
+-	free(values);
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_command_ports_stats_values_by_name(struct telemetry_impl
+-	*telemetry, int action, json_t *data)
+-{
+-	int ret;
+-	json_t *port_ids_json = json_object_get(data, "ports");
+-	json_t *stat_names_json = json_object_get(data, "stats");
+-	uint64_t num_stat_names = json_array_size(stat_names_json);
+-	const char *stat_names[num_stat_names];
+-	struct telemetry_encode_param ep;
+-	size_t index;
+-	json_t *value;
+-
+-	ep.pp.num_port_ids = json_array_size(port_ids_json);
+-	ep.pp.num_metric_ids = num_stat_names;
+-	memset(&ep, 0, sizeof(ep));
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	if (action != ACTION_GET) {
+-		TELEMETRY_LOG_WARN("Invalid action for this command");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	if (!json_is_object(data)) {
+-		TELEMETRY_LOG_WARN("Invalid data provided for this command");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	if (!json_is_array(port_ids_json) ||
+-		 !json_is_array(stat_names_json)) {
+-		TELEMETRY_LOG_WARN("Invalid input data array(s)");
+-		ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -1;
+-	}
+-
+-	json_array_foreach(port_ids_json, index, value) {
+-		if (!json_is_integer(value)) {
+-			TELEMETRY_LOG_WARN("Port ID given is not valid");
+-			ret = rte_telemetry_send_error_response(telemetry,
+-				-EINVAL);
+-			if (ret < 0)
+-				TELEMETRY_LOG_ERR("Could not send error");
+-			return -1;
+-		}
+-		ep.pp.port_ids[index] = json_integer_value(value);
+-		ret = rte_telemetry_is_port_active(ep.pp.port_ids[index]);
+-		if (ret < 1) {
+-			ret = rte_telemetry_send_error_response(telemetry,
+-				-EINVAL);
+-			if (ret < 0)
+-				TELEMETRY_LOG_ERR("Could not send error");
+-			return -1;
+-		}
+-	}
+-
+-	json_array_foreach(stat_names_json, index, value) {
+-		if (!json_is_string(value)) {
+-			TELEMETRY_LOG_WARN("Stat Name given is not a string");
+-
+-			ret = rte_telemetry_send_error_response(telemetry,
+-					-EINVAL);
+-			if (ret < 0)
+-				TELEMETRY_LOG_ERR("Could not send error");
+-
+-			return -1;
+-		}
+-		stat_names[index] = json_string_value(value);
+-	}
+-
+-	ret = rte_telemetry_stat_names_to_ids(telemetry, stat_names,
+-		ep.pp.metric_ids, num_stat_names);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not convert stat names to IDs");
+-		return -1;
+-	}
+-
+-	ep.type = PORT_STATS;
+-	ret = rte_telemetry_send_ports_stats_values(&ep, telemetry);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Sending ports stats values failed");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_parse_command(struct telemetry_impl *telemetry, int action,
+-	const char *command, json_t *data)
+-{
+-	int ret;
+-	uint32_t i;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	struct rte_telemetry_command commands[] = {
+-		{
+-			.text = "clients",
+-			.fn = &rte_telemetry_command_clients
+-		},
+-		{
+-			.text = "ports",
+-			.fn = &rte_telemetry_command_ports
+-		},
+-		{
+-			.text = "ports_details",
+-			.fn = &rte_telemetry_command_ports_details
+-		},
+-		{
+-			.text = "port_stats",
+-			.fn = &rte_telemetry_command_port_stats
+-		},
+-		{
+-			.text = "ports_stats_values_by_name",
+-			.fn = &rte_telemetry_command_ports_stats_values_by_name
+-		},
+-		{
+-			.text = "ports_all_stat_values",
+-			.fn = &rte_telemetry_command_ports_all_stat_values
+-		},
+-		{
+-			.text = "global_stat_values",
+-			.fn = &rte_telemetry_command_global_stat_values
+-		}
+-	};
+-
+-	const uint32_t num_commands = RTE_DIM(commands);
+-
+-	for (i = 0; i < num_commands; i++) {
+-		if (strcmp(command, commands[i].text) == 0) {
+-			ret = commands[i].fn(telemetry, action, data);
+-			if (ret < 0) {
+-				TELEMETRY_LOG_ERR("Command Function for %s failed",
+-					commands[i].text);
+-				return -1;
+-			}
+-			return 0;
+-		}
+-	}
+-
+-	TELEMETRY_LOG_WARN("\"%s\" command not found", command);
+-
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0)
+-		TELEMETRY_LOG_ERR("Could not send error");
+-
+-	return -1;
+-}
+-
+-int32_t
+-rte_telemetry_parse(struct telemetry_impl *telemetry, char *socket_rx_data)
+-{
+-	int ret, action_int;
+-	json_error_t error;
+-	json_t *root, *action, *command, *data;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Invalid telemetry argument");
+-		return -1;
+-	}
+-
+-	root = json_loads(socket_rx_data, 0, &error);
+-	if (root == NULL) {
+-		TELEMETRY_LOG_WARN("Could not load JSON object from data passed in : %s",
+-				error.text);
+-		ret = rte_telemetry_send_error_response(telemetry, -EPERM);
+-		if (ret < 0)
+-			TELEMETRY_LOG_ERR("Could not send error");
+-		return -EPERM;
+-	} else if (!json_is_object(root)) {
+-		TELEMETRY_LOG_WARN("JSON Request is not a JSON object");
+-		json_decref(root);
+-		goto einval_fail;
+-	}
+-
+-	action = json_object_get(root, "action");
+-	if (action == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have action field");
+-		goto einval_fail;
+-	} else if (!json_is_integer(action)) {
+-		TELEMETRY_LOG_WARN("Action value is not an integer");
+-		goto einval_fail;
+-	}
+-
+-	command = json_object_get(root, "command");
+-	if (command == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have command field");
+-		goto einval_fail;
+-	} else if (!json_is_string(command)) {
+-		TELEMETRY_LOG_WARN("Command value is not a string");
+-		goto einval_fail;
+-	}
+-
+-	action_int = json_integer_value(action);
+-	if (action_int != ACTION_GET && action_int != ACTION_DELETE) {
+-		TELEMETRY_LOG_WARN("Invalid action code");
+-		goto einval_fail;
+-	}
+-
+-	const char *command_string = json_string_value(command);
+-	data = json_object_get(root, "data");
+-	if (data == NULL) {
+-		TELEMETRY_LOG_WARN("Request does not have data field");
+-		goto einval_fail;
+-	}
+-
+-	ret = rte_telemetry_parse_command(telemetry, action_int, command_string,
+-		data);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_WARN("Could not parse command");
+-		return -EINVAL;
+-	}
+-
+-	return 0;
+-
+-einval_fail:
+-	ret = rte_telemetry_send_error_response(telemetry, -EINVAL);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not send error");
+-		return -EPERM;
+-	}
+-	return -EINVAL;
+-}
+diff --git a/lib/librte_telemetry/rte_telemetry_parser.h b/lib/librte_telemetry/rte_telemetry_parser.h
+deleted file mode 100644
+index 28b808d..0000000
+--- a/lib/librte_telemetry/rte_telemetry_parser.h
++++ /dev/null
+@@ -1,15 +0,0 @@
+-/* SPDX-License-Identifier: BSD-3-Clause
+- * Copyright(c) 2018 Intel Corporation
+- */
+-
+-#include "rte_telemetry_internal.h"
+-#include "rte_compat.h"
+-
+-#ifndef _RTE_TELEMETRY_PARSER_H_
+-#define _RTE_TELEMETRY_PARSER_H_
+-
+-__rte_experimental
+-int32_t
+-rte_telemetry_parse(struct telemetry_impl *telemetry, char *socket_rx_data);
+-
+-#endif
+diff --git a/lib/librte_telemetry/rte_telemetry_parser_test.c b/lib/librte_telemetry/rte_telemetry_parser_test.c
+deleted file mode 100644
+index 23ec7a7..0000000
+--- a/lib/librte_telemetry/rte_telemetry_parser_test.c
++++ /dev/null
+@@ -1,535 +0,0 @@
+-/* SPDX-License-Identifier: BSD-3-Clause
+- * Copyright(c) 2018 Intel Corporation
+- */
+-
+-#include <stdio.h>
+-#include <stdint.h>
+-#include <string.h>
+-#include <errno.h>
+-#include <jansson.h>
+-#include <sys/socket.h>
+-#include <sys/un.h>
+-#include <unistd.h>
+-
+-#include <rte_common.h>
+-#include <rte_tailq.h>
+-#include <rte_string_fns.h>
+-
+-#include "rte_telemetry_parser.h"
+-#include "rte_telemetry_internal.h"
+-
+-enum choices {
+-	INV_ACTION_VAL,
+-	INV_COMMAND_VAL,
+-	INV_DATA_VAL,
+-	INV_ACTION_FIELD,
+-	INV_COMMAND_FIELD,
+-	INV_DATA_FIELD,
+-	INV_JSON_FORMAT,
+-	VALID_REQ
+-};
+-
+-
+-#define TEST_CLIENT "/var/run/dpdk/test_client"
+-
+-static int32_t
+-rte_telemetry_create_test_socket(struct telemetry_impl *telemetry,
+-	const char *test_client_path)
+-{
+-	int ret, sockfd;
+-	struct sockaddr_un addr = {0};
+-	struct telemetry_client *client;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Telemetry argument has not been initialised");
+-		return -EINVAL;
+-	}
+-
+-	sockfd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+-	if (sockfd < 0) {
+-		TELEMETRY_LOG_ERR("Test socket creation failure");
+-		return -1;
+-	}
+-
+-	addr.sun_family = AF_UNIX;
+-	strlcpy(addr.sun_path, test_client_path, sizeof(addr.sun_path));
+-	unlink(test_client_path);
+-
+-	if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+-		TELEMETRY_LOG_ERR("Test socket binding failure");
+-		return -1;
+-	}
+-
+-	if (listen(sockfd, 1) < 0) {
+-		TELEMETRY_LOG_ERR("Listen failure");
+-		return -1;
+-	}
+-
+-	ret = rte_telemetry_register_client(telemetry, test_client_path);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Register dummy client failed: %i", ret);
+-		return -1;
+-	}
+-
+-	ret = accept(sockfd, NULL, NULL);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Socket accept failed");
+-		return -1;
+-	}
+-
+-	TAILQ_FOREACH(client, &telemetry->client_list_head, client_list)
+-		telemetry->request_client = client;
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_format_port_stat_ids(int *port_ids, int num_port_ids,
+-	const char * const *stat_names, int num_stat_names, json_t **data)
+-{
+-
+-	int ret;
+-	json_t *stat_names_json_array = NULL;
+-	json_t *port_ids_json_array = NULL;
+-	uint32_t i;
+-
+-	if (num_port_ids < 0) {
+-		TELEMETRY_LOG_ERR("Port Ids Count invalid");
+-		goto fail;
+-	}
+-
+-	*data = json_object();
+-	if (*data == NULL) {
+-		TELEMETRY_LOG_ERR("Data json object creation failed");
+-		goto fail;
+-	}
+-
+-	port_ids_json_array = json_array();
+-	if (port_ids_json_array == NULL) {
+-		TELEMETRY_LOG_ERR("port_ids_json_array creation failed");
+-		goto fail;
+-	}
+-
+-	for (i = 0; i < (uint32_t)num_port_ids; i++) {
+-		ret = json_array_append(port_ids_json_array,
+-				json_integer(port_ids[i]));
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("JSON array creation failed");
+-			goto fail;
+-		}
+-	}
+-
+-	ret = json_object_set_new(*data, "ports", port_ids_json_array);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Setting 'ports' value in data object failed");
+-		goto fail;
+-	}
+-
+-	if (stat_names) {
+-		if (num_stat_names < 0) {
+-			TELEMETRY_LOG_ERR("Stat Names Count invalid");
+-			goto fail;
+-		}
+-
+-		stat_names_json_array = json_array();
+-		if (stat_names_json_array == NULL) {
+-			TELEMETRY_LOG_ERR("stat_names_json_array creation failed");
+-			goto fail;
+-		}
+-
+-		uint32_t i;
+-		for (i = 0; i < (uint32_t)num_stat_names; i++) {
+-			ret = json_array_append(stat_names_json_array,
+-				 json_string(stat_names[i]));
+-			if (ret < 0) {
+-				TELEMETRY_LOG_ERR("JSON array creation failed");
+-				goto fail;
+-			}
+-		}
+-
+-		ret = json_object_set_new(*data, "stats", stat_names_json_array);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting 'stats' value in data object failed");
+-			goto fail;
+-		}
+-	}
+-
+-	return 0;
+-
+-fail:
+-	if (*data)
+-		json_decref(*data);
+-	if (stat_names_json_array)
+-		json_decref(stat_names_json_array);
+-	if (port_ids_json_array)
+-		json_decref(port_ids_json_array);
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_create_json_request(int action, const char *command,
+-	const char *client_path, int *port_ids, int num_port_ids,
+-	const char * const *stat_names, int num_stat_names, char **request,
+-	int inv_choice)
+-{
+-	int ret;
+-	json_t *root = json_object();
+-	json_t *data;
+-
+-	if (root == NULL) {
+-		TELEMETRY_LOG_ERR("Could not create root json object");
+-		goto fail;
+-	}
+-
+-	if (inv_choice == INV_ACTION_FIELD) {
+-		ret = json_object_set_new(root, "ac--on", json_integer(action));
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting invalid action field in root object failed");
+-			goto fail;
+-		}
+-	} else {
+-		ret = json_object_set_new(root, "action", json_integer(action));
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting valid action field in root object failed");
+-			goto fail;
+-		}
+-	}
+-
+-	if (inv_choice == INV_COMMAND_FIELD) {
+-		ret = json_object_set_new(root, "co---nd", json_string(command));
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting invalid command field in root object failed");
+-			goto fail;
+-		}
+-	} else {
+-		ret = json_object_set_new(root, "command", json_string(command));
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting valid command field in root object failed");
+-			goto fail;
+-		}
+-	}
+-
+-	data = json_null();
+-	if (client_path) {
+-		data = json_object();
+-		if (data == NULL) {
+-			TELEMETRY_LOG_ERR("Data json object creation failed");
+-			goto fail;
+-		}
+-
+-		ret = json_object_set_new(data, "client_path",
+-				json_string(client_path));
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting valid client_path field in data object failed");
+-			goto fail;
+-		}
+-
+-	} else if (port_ids) {
+-		ret = rte_telemetry_format_port_stat_ids(port_ids, num_port_ids,
+-				stat_names, num_stat_names, &data);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Formatting Port/Stat arrays failed");
+-			goto fail;
+-		}
+-
+-	}
+-
+-	if (inv_choice == INV_DATA_FIELD) {
+-		ret = json_object_set_new(root, "d--a", data);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting invalid data field in data object failed");
+-			goto fail;
+-		}
+-	} else {
+-		ret = json_object_set_new(root, "data", data);
+-		if (ret < 0) {
+-			TELEMETRY_LOG_ERR("Setting valid data field in data object failed");
+-			goto fail;
+-		}
+-	}
+-
+-	*request = json_dumps(root, 0);
+-	if (*request == NULL) {
+-		TELEMETRY_LOG_ERR("Converting JSON root object to char* failed");
+-		goto fail;
+-	}
+-
+-	json_decref(root);
+-	return 0;
+-
+-fail:
+-	if (root)
+-		json_decref(root);
+-	return -1;
+-}
+-
+-static int32_t
+-rte_telemetry_send_get_ports_and_stats_request(struct telemetry_impl *telemetry,
+-	int action_choice, const char *command_choice, int inv_choice)
+-{
+-	int ret;
+-	char *request;
+-	const char *client_path_data = NULL;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Telemetry argument has not been initialised");
+-		return -EINVAL;
+-	}
+-
+-
+-	if (inv_choice == INV_ACTION_VAL)
+-		action_choice = -1;
+-	else if (inv_choice == INV_COMMAND_VAL)
+-		command_choice = "INVALID_COMMAND";
+-	else if (inv_choice == INV_DATA_VAL)
+-		client_path_data = "INVALID_DATA";
+-
+-	ret = rte_telemetry_create_json_request(action_choice, command_choice,
+-		client_path_data, NULL, -1, NULL, -1, &request, inv_choice);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not create JSON Request");
+-		return -1;
+-	}
+-
+-	if (inv_choice == INV_JSON_FORMAT)
+-		request++;
+-
+-	ret = rte_telemetry_parse(telemetry, request);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_WARN("Could not parse JSON Request");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_send_get_ports_details_request(struct telemetry_impl *telemetry,
+-	int action_choice, int *port_ids, int num_port_ids, int inv_choice)
+-{
+-	int ret;
+-	char *request;
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Telemetry argument has not been initialised");
+-		return -EINVAL;
+-	}
+-
+-	const char *command = "ports_details";
+-
+-	if (inv_choice == INV_ACTION_VAL)
+-		action_choice = -1;
+-	else if (inv_choice == INV_COMMAND_VAL)
+-		command = "INVALID_COMMAND";
+-	else if (inv_choice == INV_DATA_VAL)
+-		port_ids = NULL;
+-
+-
+-	ret = rte_telemetry_create_json_request(action_choice, command, NULL,
+-		port_ids, num_port_ids, NULL, -1, &request, inv_choice);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not create JSON Request");
+-		return -1;
+-	}
+-
+-	if (inv_choice == INV_JSON_FORMAT)
+-		request++;
+-
+-	ret = rte_telemetry_parse(telemetry, request);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_WARN("Could not parse JSON Request");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_send_stats_values_by_name_request(struct telemetry_impl
+-	*telemetry, int action_choice, int *port_ids, int num_port_ids,
+-	const char * const *stat_names, int num_stat_names,
+-	int inv_choice)
+-{
+-	int ret;
+-	char *request;
+-	const char *command = "ports_stats_values_by_name";
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Telemetry argument has not been initialised");
+-		return -EINVAL;
+-	}
+-
+-	if (inv_choice == INV_ACTION_VAL)
+-		action_choice = -1;
+-	else if (inv_choice == INV_COMMAND_VAL)
+-		command = "INVALID_COMMAND";
+-	else if (inv_choice == INV_DATA_VAL) {
+-		port_ids = NULL;
+-		stat_names = NULL;
+-	}
+-
+-	ret = rte_telemetry_create_json_request(action_choice, command, NULL,
+-		port_ids, num_port_ids, stat_names, num_stat_names, &request,
+-		inv_choice);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not create JSON Request");
+-		return -1;
+-	}
+-
+-	if (inv_choice == INV_JSON_FORMAT)
+-		request++;
+-
+-	ret = rte_telemetry_parse(telemetry, request);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_WARN("Could not parse JSON Request");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-static int32_t
+-rte_telemetry_send_unreg_request(struct telemetry_impl *telemetry,
+-	int action_choice, const char *client_path, int inv_choice)
+-{
+-	int ret;
+-	char *request;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Telemetry argument has not been initialised");
+-		return -EINVAL;
+-	}
+-
+-	const char *command = "clients";
+-
+-	if (inv_choice == INV_ACTION_VAL)
+-		action_choice = -1;
+-	else if (inv_choice == INV_COMMAND_VAL)
+-		command = "INVALID_COMMAND";
+-	else if (inv_choice == INV_DATA_VAL)
+-		client_path = NULL;
+-
+-	ret = rte_telemetry_create_json_request(action_choice, command,
+-		client_path, NULL, -1, NULL, -1, &request, inv_choice);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not create JSON Request");
+-		return -1;
+-	}
+-
+-	if (inv_choice == INV_JSON_FORMAT)
+-		request++;
+-
+-	ret = rte_telemetry_parse(telemetry, request);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_WARN("Could not parse JSON Request");
+-		return -1;
+-	}
+-
+-	return 0;
+-}
+-
+-int32_t
+-rte_telemetry_parser_test(struct telemetry_impl *telemetry)
+-{
+-	int ret;
+-	const char *client_path = TEST_CLIENT;
+-
+-	if (telemetry == NULL) {
+-		TELEMETRY_LOG_ERR("Telemetry argument has not been initialised");
+-		return -EINVAL;
+-	}
+-
+-	ret = rte_telemetry_create_test_socket(telemetry, client_path);
+-	if (ret < 0) {
+-		TELEMETRY_LOG_ERR("Could not create test request client socket");
+-		return -1;
+-	}
+-
+-	int port_ids[] = {0, 1};
+-	int num_port_ids = RTE_DIM(port_ids);
+-
+-	static const char * const stat_names[] = {"tx_good_packets",
+-		"rx_good_packets"};
+-	int num_stat_names = RTE_DIM(stat_names);
+-
+-	static const char * const test_types[] = {
+-		"INVALID ACTION VALUE TESTS",
+-		"INVALID COMMAND VALUE TESTS",
+-		"INVALID DATA VALUE TESTS",
+-		"INVALID ACTION FIELD TESTS",
+-		"INVALID COMMAND FIELD TESTS",
+-		"INVALID DATA FIELD TESTS",
+-		"INVALID JSON FORMAT TESTS",
+-		"VALID TESTS"
+-	};
+-
+-
+-#define NUM_TEST_TYPES (sizeof(test_types)/sizeof(const char * const))
+-
+-	uint32_t i;
+-	for (i = 0; i < NUM_TEST_TYPES; i++) {
+-		TELEMETRY_LOG_INFO("%s", test_types[i]);
+-
+-		ret = rte_telemetry_send_get_ports_and_stats_request(telemetry,
+-			ACTION_GET, "ports", i);
+-		if (ret != 0 && i == VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports valid test failed");
+-			return -EPERM;
+-		} else if (ret != -1 && i != VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports invalid test failed");
+-			return -EPERM;
+-		}
+-
+-		TELEMETRY_LOG_INFO("Success - Get ports test passed");
+-
+-		ret = rte_telemetry_send_get_ports_details_request(telemetry,
+-			ACTION_GET, port_ids, num_port_ids, i);
+-		if (ret != 0 && i == VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports details valid");
+-			return -EPERM;
+-		} else if (ret != -1 && i != VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports details invalid");
+-			return -EPERM;
+-		}
+-
+-		TELEMETRY_LOG_INFO("Success - Get ports details test passed");
+-
+-		ret = rte_telemetry_send_get_ports_and_stats_request(telemetry,
+-			ACTION_GET, "port_stats", i);
+-		if (ret != 0  && i == VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get port stats valid test");
+-			return -EPERM;
+-		} else if (ret != -1 && i != VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports stats invalid test failed");
+-			return -EPERM;
+-		}
+-
+-		TELEMETRY_LOG_INFO("Success - Get ports stats test passed");
+-
+-		ret = rte_telemetry_send_stats_values_by_name_request(telemetry,
+-			ACTION_GET, port_ids, num_port_ids, stat_names,
+-			num_stat_names, i);
+-		if (ret != 0 && i == VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports stats values by name valid test failed");
+-			return -EPERM;
+-		} else if (ret != -1 && i != VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Get ports stats values by name invalid test failed");
+-			return -EPERM;
+-		}
+-
+-		TELEMETRY_LOG_INFO("Success - Get ports stats values by name test passed");
+-
+-		ret = rte_telemetry_send_unreg_request(telemetry, ACTION_DELETE,
+-			client_path, i);
+-		if (ret != 0 && i == VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Deregister valid test failed");
+-			return -EPERM;
+-		} else if (ret != -1 && i != VALID_REQ) {
+-			TELEMETRY_LOG_ERR("Deregister invalid test failed");
+-			return -EPERM;
+-		}
+-
+-		TELEMETRY_LOG_INFO("Success - Deregister test passed");
+-	}
+-
+-	return 0;
+-}
+diff --git a/lib/librte_telemetry/rte_telemetry_socket_tests.h b/lib/librte_telemetry/rte_telemetry_socket_tests.h
+deleted file mode 100644
+index db9167c..0000000
+--- a/lib/librte_telemetry/rte_telemetry_socket_tests.h
++++ /dev/null
+@@ -1,36 +0,0 @@
+-/* SPDX-License-Identifier: BSD-3-Clause
+- * Copyright(c) 2018 Intel Corporation
+- */
+-
+-#include <stdbool.h>
+-
+-#include "rte_telemetry_internal.h"
+-
+-#ifndef _RTE_TELEMETRY_SOCKET_TESTING_H_
+-#define _RTE_TELEMETRY_SOCKET_TESTING_H_
+-
+-int32_t
+-rte_telemetry_json_socket_message_test(struct telemetry_impl *telemetry,
+-	int fd);
+-
+-int32_t
+-rte_telemetry_invalid_json_test(struct telemetry_impl *telemetry, int fd);
+-
+-int32_t
+-rte_telemetry_valid_json_test(struct telemetry_impl *telemetry, int fd);
+-
+-int32_t
+-rte_telemetry_json_contents_test(struct telemetry_impl *telemetry, int fd);
+-
+-int32_t
+-rte_telemetry_json_empty_test(struct telemetry_impl *telemetry, int fd);
+-
+-int32_t
+-rte_telemetry_socket_register_test(struct telemetry_impl *telemetry, int *fd,
+-	int send_fd, int recv_fd);
+-
+-int32_t
+-rte_telemetry_socket_test_setup(struct telemetry_impl *telemetry, int *send_fd,
+-	int *recv_fd);
+-
+-#endif
+diff --git a/lib/librte_telemetry/rte_telemetry_version.map b/lib/librte_telemetry/rte_telemetry_version.map
+index fa62d77..86433c2 100644
+--- a/lib/librte_telemetry/rte_telemetry_version.map
++++ b/lib/librte_telemetry/rte_telemetry_version.map
+@@ -1,10 +1,18 @@
+ EXPERIMENTAL {
+ 	global:
+ 
+-	rte_telemetry_cleanup;
++	rte_tel_data_add_array_int;
++	rte_tel_data_add_array_string;
++	rte_tel_data_add_array_u64;
++	rte_tel_data_add_dict_int;
++	rte_tel_data_add_dict_string;
++	rte_tel_data_add_dict_u64;
++	rte_tel_data_start_array;
++	rte_tel_data_start_dict;
++	rte_tel_data_string;
+ 	rte_telemetry_init;
+-	rte_telemetry_parse;
+-	rte_telemetry_selftest;
++	rte_telemetry_legacy_register;
++	rte_telemetry_register_cmd;
+ 
+ 	local: *;
+ };
+diff --git a/lib/librte_telemetry/telemetry.c b/lib/librte_telemetry/telemetry.c
+new file mode 100644
+index 0000000..e7e3d86
+--- /dev/null
++++ b/lib/librte_telemetry/telemetry.c
+@@ -0,0 +1,412 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#include <unistd.h>
++#include <pthread.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <dlfcn.h>
++
++/* we won't link against libbsd, so just always use DPDKs-specific strlcpy */
++#undef RTE_USE_LIBBSD
++#include <rte_string_fns.h>
++#include <rte_common.h>
++#include <rte_spinlock.h>
++#include <rte_version.h>
++
++#include "rte_telemetry.h"
++#include "telemetry_json.h"
++#include "telemetry_data.h"
++#include "rte_telemetry_legacy.h"
++
++#define MAX_CMD_LEN 56
++#define MAX_HELP_LEN 64
++#define MAX_OUTPUT_LEN (1024 * 16)
++
++static void *
++client_handler(void *socket);
++
++struct cmd_callback {
++	char cmd[MAX_CMD_LEN];
++	telemetry_cb fn;
++	char help[MAX_HELP_LEN];
++};
++
++struct socket {
++	int sock;
++	char path[sizeof(((struct sockaddr_un *)0)->sun_path)];
++	handler fn;
++};
++static struct socket v2_socket; /* socket for v2 telemetry */
++static struct socket v1_socket; /* socket for v1 telemetry */
++static char telemetry_log_error[1024]; /* Will contain error on init failure */
++/* list of command callbacks, with one command registered by default */
++static struct cmd_callback callbacks[TELEMETRY_MAX_CALLBACKS];
++static int num_callbacks; /* How many commands are registered */
++/* Used when accessing or modifying list of command callbacks */
++static rte_spinlock_t callback_sl = RTE_SPINLOCK_INITIALIZER;
++
++int
++rte_telemetry_register_cmd(const char *cmd, telemetry_cb fn, const char *help)
++{
++	int i = 0;
++
++	if (strlen(cmd) >= MAX_CMD_LEN || fn == NULL || cmd[0] != '/'
++			|| strlen(help) >= MAX_HELP_LEN)
++		return -EINVAL;
++	if (num_callbacks >= TELEMETRY_MAX_CALLBACKS)
++		return -ENOENT;
++
++	rte_spinlock_lock(&callback_sl);
++	while (i < num_callbacks && strcmp(cmd, callbacks[i].cmd) > 0)
++		i++;
++	if (i != num_callbacks)
++		/* Move elements to keep the list alphabetical */
++		memmove(callbacks + i + 1, callbacks + i,
++			sizeof(struct cmd_callback) * (num_callbacks - i));
++
++	strlcpy(callbacks[i].cmd, cmd, MAX_CMD_LEN);
++	callbacks[i].fn = fn;
++	strlcpy(callbacks[i].help, help, MAX_HELP_LEN);
++	num_callbacks++;
++	rte_spinlock_unlock(&callback_sl);
++
++	return 0;
++}
++
++static int
++list_commands(const char *cmd __rte_unused, const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	int i;
++
++	rte_tel_data_start_array(d, RTE_TEL_STRING_VAL);
++	for (i = 0; i < num_callbacks; i++)
++		rte_tel_data_add_array_string(d, callbacks[i].cmd);
++	return 0;
++}
++
++static int
++json_info(const char *cmd __rte_unused, const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	rte_tel_data_start_dict(d);
++	rte_tel_data_add_dict_string(d, "version", rte_version());
++	rte_tel_data_add_dict_int(d, "pid", getpid());
++	rte_tel_data_add_dict_int(d, "max_output_len", MAX_OUTPUT_LEN);
++	return 0;
++}
++
++static int
++command_help(const char *cmd __rte_unused, const char *params,
++		struct rte_tel_data *d)
++{
++	int i;
++
++	if (!params)
++		return -1;
++	rte_tel_data_start_dict(d);
++	rte_spinlock_lock(&callback_sl);
++	for (i = 0; i < num_callbacks; i++)
++		if (strcmp(params, callbacks[i].cmd) == 0) {
++			rte_tel_data_add_dict_string(d, params,
++					callbacks[i].help);
++			break;
++		}
++	rte_spinlock_unlock(&callback_sl);
++	if (i == num_callbacks)
++		return -1;
++	return 0;
++}
++
++static void
++output_json(const char *cmd, const struct rte_tel_data *d, int s)
++{
++	char out_buf[MAX_OUTPUT_LEN];
++
++	char *cb_data_buf;
++	size_t buf_len, prefix_used, used = 0;
++	unsigned int i;
++
++	RTE_BUILD_BUG_ON(sizeof(out_buf) < MAX_CMD_LEN +
++			RTE_TEL_MAX_SINGLE_STRING_LEN + 10);
++	switch (d->type) {
++	case RTE_TEL_NULL:
++		used = snprintf(out_buf, sizeof(out_buf), "{\"%.*s\":null}",
++				MAX_CMD_LEN, cmd ? cmd : "none");
++		break;
++	case RTE_TEL_STRING:
++		used = snprintf(out_buf, sizeof(out_buf), "{\"%.*s\":\"%.*s\"}",
++				MAX_CMD_LEN, cmd,
++				RTE_TEL_MAX_SINGLE_STRING_LEN, d->data.str);
++		break;
++	case RTE_TEL_DICT:
++		prefix_used = snprintf(out_buf, sizeof(out_buf), "{\"%.*s\":",
++				MAX_CMD_LEN, cmd);
++		cb_data_buf = &out_buf[prefix_used];
++		buf_len = sizeof(out_buf) - prefix_used - 1; /* space for '}' */
++
++		used = rte_tel_json_empty_obj(cb_data_buf, buf_len, 0);
++		for (i = 0; i < d->data_len; i++) {
++			const struct tel_dict_entry *v = &d->data.dict[i];
++			switch (v->type) {
++			case RTE_TEL_STRING_VAL:
++				used = rte_tel_json_add_obj_str(cb_data_buf,
++						buf_len, used,
++						v->name, v->value.sval);
++				break;
++			case RTE_TEL_INT_VAL:
++				used = rte_tel_json_add_obj_int(cb_data_buf,
++						buf_len, used,
++						v->name, v->value.ival);
++				break;
++			case RTE_TEL_U64_VAL:
++				used = rte_tel_json_add_obj_u64(cb_data_buf,
++						buf_len, used,
++						v->name, v->value.u64val);
++				break;
++			}
++		}
++		used += prefix_used;
++		used += strlcat(out_buf + used, "}", sizeof(out_buf) - used);
++		break;
++	case RTE_TEL_ARRAY_STRING:
++	case RTE_TEL_ARRAY_INT:
++	case RTE_TEL_ARRAY_U64:
++		prefix_used = snprintf(out_buf, sizeof(out_buf), "{\"%.*s\":",
++				MAX_CMD_LEN, cmd);
++		cb_data_buf = &out_buf[prefix_used];
++		buf_len = sizeof(out_buf) - prefix_used - 1; /* space for '}' */
++
++		used = rte_tel_json_empty_array(cb_data_buf, buf_len, 0);
++		for (i = 0; i < d->data_len; i++)
++			if (d->type == RTE_TEL_ARRAY_STRING)
++				used = rte_tel_json_add_array_string(
++						cb_data_buf,
++						buf_len, used,
++						d->data.array[i].sval);
++			else if (d->type == RTE_TEL_ARRAY_INT)
++				used = rte_tel_json_add_array_int(cb_data_buf,
++						buf_len, used,
++						d->data.array[i].ival);
++			else if (d->type == RTE_TEL_ARRAY_U64)
++				used = rte_tel_json_add_array_u64(cb_data_buf,
++						buf_len, used,
++						d->data.array[i].u64val);
++		used += prefix_used;
++		used += strlcat(out_buf + used, "}", sizeof(out_buf) - used);
++		break;
++	}
++	if (write(s, out_buf, used) < 0)
++		perror("Error writing to socket");
++}
++
++static void
++perform_command(telemetry_cb fn, const char *cmd, const char *param, int s)
++{
++	struct rte_tel_data data;
++
++	int ret = fn(cmd, param, &data);
++	if (ret < 0) {
++		char out_buf[MAX_CMD_LEN + 10];
++		int used = snprintf(out_buf, sizeof(out_buf), "{\"%.*s\":null}",
++				MAX_CMD_LEN, cmd ? cmd : "none");
++		if (write(s, out_buf, used) < 0)
++			perror("Error writing to socket");
++		return;
++	}
++	output_json(cmd, &data, s);
++}
++
++static int
++unknown_command(const char *cmd __rte_unused, const char *params __rte_unused,
++		struct rte_tel_data *d)
++{
++	return d->type = RTE_TEL_NULL;
++}
++
++static void *
++client_handler(void *sock_id)
++{
++	int s = (int)(uintptr_t)sock_id;
++	char buffer[1024];
++	char info_str[1024];
++	snprintf(info_str, sizeof(info_str),
++			"{\"version\":\"%s\",\"pid\":%d,\"max_output_len\":%d}",
++			rte_version(), getpid(), MAX_OUTPUT_LEN);
++	if (write(s, info_str, strlen(info_str)) < 0) {
++		close(s);
++		return NULL;
++	}
++
++	/* receive data is not null terminated */
++	int bytes = read(s, buffer, sizeof(buffer) - 1);
++	while (bytes > 0) {
++		buffer[bytes] = 0;
++		const char *cmd = strtok(buffer, ",");
++		const char *param = strtok(NULL, ",");
++		telemetry_cb fn = unknown_command;
++		int i;
++
++		if (cmd && strlen(cmd) < MAX_CMD_LEN) {
++			rte_spinlock_lock(&callback_sl);
++			for (i = 0; i < num_callbacks; i++)
++				if (strcmp(cmd, callbacks[i].cmd) == 0) {
++					fn = callbacks[i].fn;
++					break;
++				}
++			rte_spinlock_unlock(&callback_sl);
++		}
++		perform_command(fn, cmd, param, s);
++
++		bytes = read(s, buffer, sizeof(buffer) - 1);
++	}
++	close(s);
++	return NULL;
++}
++
++static void *
++socket_listener(void *socket)
++{
++	while (1) {
++		pthread_t th;
++		struct socket *s = (struct socket *)socket;
++		int s_accepted = accept(s->sock, NULL, NULL);
++		if (s_accepted < 0) {
++			snprintf(telemetry_log_error,
++				sizeof(telemetry_log_error),
++				"Error with accept, telemetry thread quitting");
++			return NULL;
++		}
++		pthread_create(&th, NULL, s->fn, (void *)(uintptr_t)s_accepted);
++		pthread_detach(th);
++	}
++	return NULL;
++}
++
++static inline char *
++get_socket_path(const char *runtime_dir, const int version)
++{
++	static char path[PATH_MAX];
++	snprintf(path, sizeof(path), "%s/dpdk_telemetry.v%d",
++			strlen(runtime_dir) ? runtime_dir : "/tmp", version);
++	return path;
++}
++
++static void
++unlink_sockets(void)
++{
++	if (v2_socket.path[0])
++		unlink(v2_socket.path);
++	if (v1_socket.path[0])
++		unlink(v1_socket.path);
++}
++
++static int
++create_socket(char *path)
++{
++	int sock = socket(AF_UNIX, SOCK_SEQPACKET, 0);
++	if (sock < 0) {
++		snprintf(telemetry_log_error, sizeof(telemetry_log_error),
++				"Error with socket creation, %s",
++				strerror(errno));
++		return -1;
++	}
++
++	struct sockaddr_un sun = {.sun_family = AF_UNIX};
++	strlcpy(sun.sun_path, path, sizeof(sun.sun_path));
++	unlink(sun.sun_path);
++	if (bind(sock, (void *) &sun, sizeof(sun)) < 0) {
++		snprintf(telemetry_log_error, sizeof(telemetry_log_error),
++				"Error binding socket: %s",
++				strerror(errno));
++		sun.sun_path[0] = 0;
++		goto error;
++	}
++
++	if (listen(sock, 1) < 0) {
++		snprintf(telemetry_log_error, sizeof(telemetry_log_error),
++				"Error calling listen for socket: %s",
++				strerror(errno));
++		goto error;
++	}
++
++	return sock;
++
++error:
++	close(sock);
++	unlink_sockets();
++	return -1;
++}
++
++static int
++telemetry_legacy_init(const char *runtime_dir, rte_cpuset_t *cpuset)
++{
++	pthread_t t_old;
++
++	if (num_legacy_callbacks == 1) {
++		snprintf(telemetry_log_error, sizeof(telemetry_log_error),
++			 "No legacy callbacks, legacy socket not created");
++		return -1;
++	}
++
++	v1_socket.fn = legacy_client_handler;
++	if ((size_t) snprintf(v1_socket.path, sizeof(v1_socket.path),
++			"%s/telemetry", runtime_dir)
++			>= sizeof(v1_socket.path)) {
++		snprintf(telemetry_log_error, sizeof(telemetry_log_error),
++				"Error with socket binding, path too long");
++		return -1;
++	}
++	v1_socket.sock = create_socket(v1_socket.path);
++	if (v1_socket.sock < 0)
++		return -1;
++	pthread_create(&t_old, NULL, socket_listener, &v1_socket);
++	pthread_setaffinity_np(t_old, sizeof(*cpuset), cpuset);
++
++	return 0;
++}
++
++static int
++telemetry_v2_init(const char *runtime_dir, rte_cpuset_t *cpuset)
++{
++	pthread_t t_new;
++
++	rte_telemetry_register_cmd("/", list_commands,
++			"Returns list of available commands, Takes no parameters");
++	rte_telemetry_register_cmd("/info", json_info,
++			"Returns DPDK Telemetry information. Takes no parameters");
++	rte_telemetry_register_cmd("/help", command_help,
++			"Returns help text for a command. Parameters: string command");
++	v2_socket.fn = client_handler;
++	if (strlcpy(v2_socket.path, get_socket_path(runtime_dir, 2),
++			sizeof(v2_socket.path)) >= sizeof(v2_socket.path)) {
++		snprintf(telemetry_log_error, sizeof(telemetry_log_error),
++				"Error with socket binding, path too long");
++		return -1;
++	}
++
++	v2_socket.sock = create_socket(v2_socket.path);
++	if (v2_socket.sock < 0)
++		return -1;
++	pthread_create(&t_new, NULL, socket_listener, &v2_socket);
++	pthread_setaffinity_np(t_new, sizeof(*cpuset), cpuset);
++	atexit(unlink_sockets);
++
++	return 0;
++}
++
++int32_t
++rte_telemetry_init(const char *runtime_dir, rte_cpuset_t *cpuset,
++		const char **err_str)
++{
++	if (telemetry_v2_init(runtime_dir, cpuset) != 0) {
++		*err_str = telemetry_log_error;
++		return -1;
++	}
++	if (telemetry_legacy_init(runtime_dir, cpuset) != 0) {
++		*err_str = telemetry_log_error;
++	}
++	return 0;
++}
+diff --git a/lib/librte_telemetry/telemetry_data.c b/lib/librte_telemetry/telemetry_data.c
+new file mode 100644
+index 0000000..f424bbd
+--- /dev/null
++++ b/lib/librte_telemetry/telemetry_data.c
+@@ -0,0 +1,130 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#undef RTE_USE_LIBBSD
++#include <rte_string_fns.h>
++
++#include "telemetry_data.h"
++
++int
++rte_tel_data_start_array(struct rte_tel_data *d, enum rte_tel_value_type type)
++{
++	enum tel_container_types array_types[] = {
++			RTE_TEL_ARRAY_STRING, /* RTE_TEL_STRING_VAL = 0 */
++			RTE_TEL_ARRAY_INT,    /* RTE_TEL_INT_VAL = 1 */
++			RTE_TEL_ARRAY_U64,    /* RTE_TEL_u64_VAL = 2 */
++	};
++	d->type = array_types[type];
++	d->data_len = 0;
++	return 0;
++}
++
++int
++rte_tel_data_start_dict(struct rte_tel_data *d)
++{
++	d->type = RTE_TEL_DICT;
++	d->data_len = 0;
++	return 0;
++}
++
++int
++rte_tel_data_string(struct rte_tel_data *d, const char *str)
++{
++	d->type = RTE_TEL_STRING;
++	d->data_len = strlcpy(d->data.str, str, sizeof(d->data.str));
++	if (d->data_len >= RTE_TEL_MAX_SINGLE_STRING_LEN) {
++		d->data_len = RTE_TEL_MAX_SINGLE_STRING_LEN - 1;
++		return E2BIG; /* not necessarily and error, just truncation */
++	}
++	return 0;
++}
++
++int
++rte_tel_data_add_array_string(struct rte_tel_data *d, const char *str)
++{
++	if (d->type != RTE_TEL_ARRAY_STRING)
++		return -EINVAL;
++	if (d->data_len >= RTE_TEL_MAX_ARRAY_ENTRIES)
++		return -ENOSPC;
++	const size_t bytes = strlcpy(d->data.array[d->data_len++].sval,
++			str, RTE_TEL_MAX_STRING_LEN);
++	return bytes < RTE_TEL_MAX_STRING_LEN ? 0 : E2BIG;
++}
++
++int
++rte_tel_data_add_array_int(struct rte_tel_data *d, int x)
++{
++	if (d->type != RTE_TEL_ARRAY_INT)
++		return -EINVAL;
++	if (d->data_len >= RTE_TEL_MAX_ARRAY_ENTRIES)
++		return -ENOSPC;
++	d->data.array[d->data_len++].ival = x;
++	return 0;
++}
++
++int
++rte_tel_data_add_array_u64(struct rte_tel_data *d, uint64_t x)
++{
++	if (d->type != RTE_TEL_ARRAY_U64)
++		return -EINVAL;
++	if (d->data_len >= RTE_TEL_MAX_ARRAY_ENTRIES)
++		return -ENOSPC;
++	d->data.array[d->data_len++].u64val = x;
++	return 0;
++}
++
++int
++rte_tel_data_add_dict_string(struct rte_tel_data *d, const char *name,
++		const char *val)
++{
++	struct tel_dict_entry *e = &d->data.dict[d->data_len];
++	size_t nbytes, vbytes;
++
++	if (d->type != RTE_TEL_DICT)
++		return -EINVAL;
++	if (d->data_len >= RTE_TEL_MAX_DICT_ENTRIES)
++		return -ENOSPC;
++
++	d->data_len++;
++	e->type = RTE_TEL_STRING_VAL;
++	vbytes = strlcpy(e->value.sval, val, RTE_TEL_MAX_STRING_LEN);
++	nbytes = strlcpy(e->name, name, RTE_TEL_MAX_STRING_LEN);
++	if (vbytes >= RTE_TEL_MAX_STRING_LEN ||
++			nbytes >= RTE_TEL_MAX_STRING_LEN)
++		return E2BIG;
++	return 0;
++}
++
++int
++rte_tel_data_add_dict_int(struct rte_tel_data *d, const char *name, int val)
++{
++	struct tel_dict_entry *e = &d->data.dict[d->data_len];
++	if (d->type != RTE_TEL_DICT)
++		return -EINVAL;
++	if (d->data_len >= RTE_TEL_MAX_DICT_ENTRIES)
++		return -ENOSPC;
++
++	d->data_len++;
++	e->type = RTE_TEL_INT_VAL;
++	e->value.ival = val;
++	const size_t bytes = strlcpy(e->name, name, RTE_TEL_MAX_STRING_LEN);
++	return bytes < RTE_TEL_MAX_STRING_LEN ? 0 : E2BIG;
++}
++
++int
++rte_tel_data_add_dict_u64(struct rte_tel_data *d,
++		const char *name, uint64_t val)
++{
++	struct tel_dict_entry *e = &d->data.dict[d->data_len];
++	if (d->type != RTE_TEL_DICT)
++		return -EINVAL;
++	if (d->data_len >= RTE_TEL_MAX_DICT_ENTRIES)
++		return -ENOSPC;
++
++	d->data_len++;
++	e->type = RTE_TEL_U64_VAL;
++	e->value.u64val = val;
++	const size_t bytes = strlcpy(e->name, name, RTE_TEL_MAX_STRING_LEN);
++	return bytes < RTE_TEL_MAX_STRING_LEN ? 0 : E2BIG;
++}
+diff --git a/lib/librte_telemetry/telemetry_data.h b/lib/librte_telemetry/telemetry_data.h
+new file mode 100644
+index 0000000..ff3a371
+--- /dev/null
++++ b/lib/librte_telemetry/telemetry_data.h
+@@ -0,0 +1,46 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#ifndef _TELEMETRY_DATA_H_
++#define _TELEMETRY_DATA_H_
++
++#include <inttypes.h>
++#include "rte_telemetry.h"
++
++enum tel_container_types {
++	RTE_TEL_NULL,	      /** null, used as error value */
++	RTE_TEL_STRING,	      /** basic string type, no included data */
++	RTE_TEL_DICT,	      /** name-value pairs, of individual value type */
++	RTE_TEL_ARRAY_STRING, /** array of string values only */
++	RTE_TEL_ARRAY_INT,    /** array of signed, 32-bit int values */
++	RTE_TEL_ARRAY_U64,    /** array of unsigned 64-bit int values */
++};
++
++/* each type here must have an equivalent enum in the value types enum in
++ * telemetry.h and an array type defined above, and have appropriate
++ * type assignment in the RTE_TEL_data_start_array() function
++ */
++union tel_value {
++	char sval[RTE_TEL_MAX_STRING_LEN];
++	int ival;
++	uint64_t u64val;
++};
++
++struct tel_dict_entry {
++	char name[RTE_TEL_MAX_STRING_LEN];
++	enum rte_tel_value_type type;
++	union tel_value value;
++};
++
++struct rte_tel_data {
++	enum tel_container_types type;
++	unsigned int data_len; /* for array or object, how many items */
++	union {
++		char str[RTE_TEL_MAX_SINGLE_STRING_LEN];
++		struct tel_dict_entry dict[RTE_TEL_MAX_DICT_ENTRIES];
++		union tel_value array[RTE_TEL_MAX_ARRAY_ENTRIES];
++	} data; /* data container */
++};
++
++#endif
+diff --git a/lib/librte_telemetry/telemetry_json.h b/lib/librte_telemetry/telemetry_json.h
+new file mode 100644
+index 0000000..a2ce489
+--- /dev/null
++++ b/lib/librte_telemetry/telemetry_json.h
+@@ -0,0 +1,158 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#ifndef _RTE_TELEMETRY_JSON_H_
++#define _RTE_TELEMETRY_JSON_H_
++
++#include <inttypes.h>
++#include <stdarg.h>
++#include <stdio.h>
++#include <rte_common.h>
++
++/**
++ * @file
++ * Internal Telemetry Utility functions
++ *
++ * This file contains small inline functions to make it easier for applications
++ * to build up valid JSON responses to telemetry requests.
++ *
++ ***/
++
++/**
++ * @internal
++ * Copies a value into a buffer if the buffer has enough available space.
++ * Nothing written to buffer if an overflow ocurs.
++ * This function is not for use for values larger than 1k.
++ */
++__rte_format_printf(3, 4)
++static inline int
++__json_snprintf(char *buf, const int len, const char *format, ...)
++{
++	char tmp[1024];
++	va_list ap;
++	int ret;
++
++	va_start(ap, format);
++	ret = vsnprintf(tmp, sizeof(tmp), format, ap);
++	va_end(ap);
++	if (ret > 0 && ret < (int)sizeof(tmp) && ret < len) {
++		strcpy(buf, tmp);
++		return ret;
++	}
++	return 0; /* nothing written or modified */
++}
++
++/* Copies an empty array into the provided buffer. */
++static inline int
++rte_tel_json_empty_array(char *buf, const int len, const int used)
++{
++	return used + __json_snprintf(buf + used, len - used, "[]");
++}
++
++/* Copies an empty object into the provided buffer. */
++static inline int
++rte_tel_json_empty_obj(char *buf, const int len, const int used)
++{
++	return used + __json_snprintf(buf + used, len - used, "{}");
++}
++
++/* Copies a string into the provided buffer, in JSON format. */
++static inline int
++rte_tel_json_str(char *buf, const int len, const int used, const char *str)
++{
++	return used + __json_snprintf(buf + used, len - used, "\"%s\"", str);
++}
++
++/* Appends a string into the JSON array in the provided buffer. */
++static inline int
++rte_tel_json_add_array_string(char *buf, const int len, const int used,
++		const char *str)
++{
++	int ret, end = used - 1; /* strip off final delimiter */
++	if (used <= 2) /* assume empty, since minimum is '[]' */
++		return __json_snprintf(buf, len, "[\"%s\"]", str);
++
++	ret = __json_snprintf(buf + end, len - end, ",\"%s\"]", str);
++	return ret == 0 ? used : end + ret;
++}
++
++/* Appends an integer into the JSON array in the provided buffer. */
++static inline int
++rte_tel_json_add_array_int(char *buf, const int len, const int used, int val)
++{
++	int ret, end = used - 1; /* strip off final delimiter */
++	if (used <= 2) /* assume empty, since minimum is '[]' */
++		return __json_snprintf(buf, len, "[%d]", val);
++
++	ret = __json_snprintf(buf + end, len - end, ",%d]", val);
++	return ret == 0 ? used : end + ret;
++}
++
++/* Appends a uint64_t into the JSON array in the provided buffer. */
++static inline int
++rte_tel_json_add_array_u64(char *buf, const int len, const int used,
++		uint64_t val)
++{
++	int ret, end = used - 1; /* strip off final delimiter */
++	if (used <= 2) /* assume empty, since minimum is '[]' */
++		return __json_snprintf(buf, len, "[%"PRIu64"]", val);
++
++	ret = __json_snprintf(buf + end, len - end, ",%"PRIu64"]", val);
++	return ret == 0 ? used : end + ret;
++}
++
++/**
++ * Add a new element with uint64_t value to the JSON object stored in the
++ * provided buffer.
++ */
++static inline int
++rte_tel_json_add_obj_u64(char *buf, const int len, const int used,
++		const char *name, uint64_t val)
++{
++	int ret, end = used - 1;
++	if (used <= 2) /* assume empty, since minimum is '{}' */
++		return __json_snprintf(buf, len, "{\"%s\":%"PRIu64"}", name,
++				val);
++
++	ret = __json_snprintf(buf + end, len - end, ",\"%s\":%"PRIu64"}",
++			name, val);
++	return ret == 0 ? used : end + ret;
++}
++
++/**
++ * Add a new element with int value to the JSON object stored in the
++ * provided buffer.
++ */
++static inline int
++rte_tel_json_add_obj_int(char *buf, const int len, const int used,
++		const char *name, int val)
++{
++	int ret, end = used - 1;
++	if (used <= 2) /* assume empty, since minimum is '{}' */
++		return __json_snprintf(buf, len, "{\"%s\":%d}", name,
++				val);
++
++	ret = __json_snprintf(buf + end, len - end, ",\"%s\":%d}",
++			name, val);
++	return ret == 0 ? used : end + ret;
++}
++
++/**
++ * Add a new element with string value to the JSON object stored in the
++ * provided buffer.
++ */
++static inline int
++rte_tel_json_add_obj_str(char *buf, const int len, const int used,
++		const char *name, const char *val)
++{
++	int ret, end = used - 1;
++	if (used <= 2) /* assume empty, since minimum is '{}' */
++		return __json_snprintf(buf, len, "{\"%s\":\"%s\"}", name, val);
++
++	ret = __json_snprintf(buf + end, len - end, ",\"%s\":\"%s\"}",
++			name, val);
++	return ret == 0 ? used : end + ret;
++}
++
++#endif /*_RTE_TELEMETRY_JSON_H_*/
+diff --git a/lib/librte_telemetry/telemetry_legacy.c b/lib/librte_telemetry/telemetry_legacy.c
+new file mode 100644
+index 0000000..a341fe4
+--- /dev/null
++++ b/lib/librte_telemetry/telemetry_legacy.c
+@@ -0,0 +1,241 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2020 Intel Corporation
++ */
++
++#include <unistd.h>
++#include <sys/socket.h>
++#include <sys/un.h>
++#include <pthread.h>
++
++/* we won't link against libbsd, so just always use DPDKs-specific strlcpy */
++#undef RTE_USE_LIBBSD
++#include <rte_string_fns.h>
++#include <rte_common.h>
++#include <rte_spinlock.h>
++
++#include "rte_telemetry_legacy.h"
++
++#define MAX_LEN 128
++#define BUF_SIZE 1024
++#define CLIENTS_UNREG_ACTION "\"action\":2"
++#define CLIENTS_CMD "\"command\":\"clients\""
++#define CLIENTS_DATA "\"data\":{\"client_path\":\""
++#define STATS_ACTION "\"action\":0"
++#define DATA_REQ_LABEL "\"data\":"
++#define TELEMETRY_LEGACY_MAX_CALLBACKS 4
++
++
++static int
++register_client(const char *cmd __rte_unused,
++		const char *params __rte_unused,
++		char *buffer, int buf_len);
++
++struct json_command {
++	char action[MAX_LEN];
++	char cmd[MAX_LEN];
++	char data[MAX_LEN];
++	telemetry_legacy_cb fn;
++
++};
++
++struct json_command callbacks[TELEMETRY_LEGACY_MAX_CALLBACKS] = {
++		{
++			.action = "\"action\":1",
++			.cmd = CLIENTS_CMD,
++			.data = CLIENTS_DATA,
++			.fn = register_client
++		}
++};
++int num_legacy_callbacks = 1;
++static rte_spinlock_t callback_sl = RTE_SPINLOCK_INITIALIZER;
++
++int
++rte_telemetry_legacy_register(const char *cmd,
++		enum rte_telemetry_legacy_data_req data_req,
++		telemetry_legacy_cb fn)
++{
++	if (fn == NULL)
++		return -EINVAL;
++	if (num_legacy_callbacks >= (int) RTE_DIM(callbacks))
++		return -ENOENT;
++
++	rte_spinlock_lock(&callback_sl);
++	strlcpy(callbacks[num_legacy_callbacks].action, STATS_ACTION, MAX_LEN);
++	snprintf(callbacks[num_legacy_callbacks].cmd, MAX_LEN,
++			"\"command\":\"%s\"", cmd);
++	snprintf(callbacks[num_legacy_callbacks].data, MAX_LEN,
++			data_req ? "%s{\"" : "%snull",
++			DATA_REQ_LABEL);
++	callbacks[num_legacy_callbacks].fn = fn;
++	num_legacy_callbacks++;
++	rte_spinlock_unlock(&callback_sl);
++
++	return 0;
++}
++
++static int
++register_client(const char *cmd __rte_unused, const char *params,
++		char *buffer __rte_unused, int buf_len __rte_unused)
++{
++	pthread_t th;
++	char data[BUF_SIZE];
++	int fd;
++	struct sockaddr_un addrs;
++
++	if (!strchr(params, ':')) {
++		fprintf(stderr, "Invalid data\n");
++		return -1;
++	}
++	strlcpy(data, strchr(params, ':'), sizeof(data));
++	memcpy(data, &data[strlen(":\"")], strlen(data));
++	if (!strchr(data, '\"')) {
++		fprintf(stderr, "Invalid client data\n");
++		return -1;
++	}
++	*strchr(data, '\"') = 0;
++
++	fd = socket(AF_UNIX, SOCK_SEQPACKET, 0);
++	if (fd < 0) {
++		perror("Failed to open socket");
++		return -1;
++	}
++	addrs.sun_family = AF_UNIX;
++	strlcpy(addrs.sun_path, data, sizeof(addrs.sun_path));
++
++	if (connect(fd, (struct sockaddr *)&addrs, sizeof(addrs)) == -1) {
++		perror("\nClient connection error\n");
++		close(fd);
++		return -1;
++	}
++	pthread_create(&th, NULL, &legacy_client_handler,
++			(void *)(uintptr_t)fd);
++	return 0;
++}
++
++static int
++send_error_response(int s, int err)
++{
++	const char *desc;
++	char out_buf[100000];
++
++	switch (err) {
++	case -ENOMEM:
++		desc = "Memory Allocation Error";
++		break;
++	case -EINVAL:
++		desc = "Invalid Argument 404";
++		break;
++	case -EPERM:
++		desc = "Unknown";
++		break;
++	default:
++		/* Default case keeps behaviour of Telemetry library */
++		printf("\nInvalid error type: %d\n", err);
++		return -EINVAL;
++	}
++	int used = snprintf(out_buf, sizeof(out_buf), "{\"status_code\": "
++			"\"Status Error: %s\", \"data\": null}", desc);
++	if (write(s, out_buf, used) < 0) {
++		perror("Error writing to socket");
++		return -1;
++	}
++	return 0;
++}
++
++static void
++perform_command(telemetry_legacy_cb fn, const char *param, int s)
++{
++	char out_buf[100000];
++	int ret, used = 0;
++
++	ret = fn("", param, out_buf, sizeof(out_buf));
++	if (ret < 0) {
++		ret = send_error_response(s, ret);
++		if (ret < 0)
++			printf("\nCould not send error response\n");
++		return;
++	}
++	used += ret;
++	if (write(s, out_buf, used) < 0)
++		perror("Error writing to socket");
++}
++
++static int
++parse_client_request(char *buffer, int buf_len, int s)
++{
++	int i;
++	char *data = buffer + buf_len;
++	telemetry_legacy_cb fn = NULL;
++	const char *valid_sep = ",}";
++	if (buffer[0] != '{' || buffer[buf_len - 1] != '}')
++		return -EPERM;
++
++	if (strstr(buffer, CLIENTS_UNREG_ACTION) && strstr(buffer, CLIENTS_CMD)
++			&& strstr(buffer, CLIENTS_DATA))
++		return 0;
++
++	for (i = 0; i < num_legacy_callbacks; i++) {
++		char *action_ptr = strstr(buffer, callbacks[i].action);
++		char *cmd_ptr = strstr(buffer, callbacks[i].cmd);
++		char *data_ptr = strstr(buffer, callbacks[i].data);
++		if (!action_ptr || !cmd_ptr || !data_ptr)
++			continue;
++
++		char action_sep = action_ptr[strlen(callbacks[i].action)];
++		char cmd_sep = cmd_ptr[strlen(callbacks[i].cmd)];
++		if (!(strchr(valid_sep, action_sep) && strchr(valid_sep,
++				cmd_sep)))
++			return -EPERM;
++		char data_sep;
++
++		if (!strchr(data_ptr, '{'))
++			data_sep = data_ptr[strlen(callbacks[i].data)];
++		else {
++			if (!strchr(data_ptr, '}'))
++				return -EINVAL;
++			char *data_end = strchr(data_ptr, '}');
++			data = data_ptr + strlen(DATA_REQ_LABEL);
++			data_sep = data_end[1];
++			data_end[1] = 0;
++		}
++		if (!strchr(valid_sep, data_sep))
++			return -EPERM;
++		fn = callbacks[i].fn;
++		break;
++	}
++
++	if (!fn)
++		return -EINVAL;
++	perform_command(fn, data, s);
++	return 0;
++}
++
++void *
++legacy_client_handler(void *sock_id)
++{
++	int s = (int)(uintptr_t)sock_id;
++	int ret;
++	char buffer_recv[BUF_SIZE];
++	/* receive data is not null terminated */
++	int bytes = read(s, buffer_recv, sizeof(buffer_recv) - 1);
++
++	while (bytes > 0) {
++		buffer_recv[bytes] = 0;
++		int i, j;
++		char buffer[BUF_SIZE];
++		for (i = 0, j = 0; buffer_recv[i] != '\0'; i++) {
++			buffer[j] = buffer_recv[i];
++			j += !isspace(buffer_recv[i]);
++		}
++		buffer[j] = 0;
++		ret = parse_client_request(buffer, j, s);
++		if (ret < 0) {
++			ret = send_error_response(s, ret);
++			if (ret < 0)
++				printf("\nCould not send error response\n");
++		}
++		bytes = read(s, buffer_recv, sizeof(buffer_recv) - 1);
++	}
++	close(s);
++	return NULL;
++}
+diff --git a/lib/meson.build b/lib/meson.build
+index 6ceb5e7..aadb90b 100644
+--- a/lib/meson.build
++++ b/lib/meson.build
+@@ -10,6 +10,7 @@
+ # core libs which are widely reused, so their deps are kept to a minimum.
+ libraries = [
+ 	'kvargs', # eal depends on kvargs
++	'telemetry', # basic info querying
+ 	'eal', # everything depends on eal
+ 	'ring', 'mempool', 'mbuf', 'net', 'meter', 'ethdev', 'pci', # core
+ 	'cmdline',
+@@ -30,13 +31,16 @@ libraries = [
+ 	# add pkt framework libs which use other libs from above
+ 	'port', 'table', 'pipeline',
+ 	# flow_classify lib depends on pkt framework table lib
+-	'flow_classify', 'bpf', 'telemetry']
++	'flow_classify', 'bpf']
+ 
+ if is_windows
+ 	libraries = ['kvargs','eal'] # only supported libraries for windows
+ endif
+ 
+ default_cflags = machine_args
++default_cflags += ['-DALLOW_EXPERIMENTAL_API']
++default_cflags += ['-DALLOW_INTERNAL_API']
++
+ if cc.has_argument('-Wno-format-truncation')
+ 	default_cflags += '-Wno-format-truncation'
+ endif
+@@ -47,7 +51,6 @@ foreach l:libraries
+ 	build = true
+ 	reason = '<unknown reason>' # set if build == false to explain why
+ 	name = l
+-	allow_experimental_apis = false
+ 	use_function_versioning = false
+ 	sources = []
+ 	headers = []
+@@ -98,9 +101,6 @@ foreach l:libraries
+ 			static_dep = shared_dep
+ 		else
+ 
+-			if allow_experimental_apis
+-				cflags += '-DALLOW_EXPERIMENTAL_API'
+-			endif
+ 			if use_function_versioning
+ 				cflags += '-DRTE_USE_FUNCTION_VERSIONING'
+ 			endif
+diff --git a/meson.build b/meson.build
+index b7ae9c8..fcdac07 100644
+--- a/meson.build
++++ b/meson.build
+@@ -24,12 +24,21 @@ dpdk_libs_disabled = []
+ dpdk_drvs_disabled = []
+ abi_version_file = files('ABI_VERSION')
+ 
++if host_machine.cpu_family().startswith('x86')
++	arch_subdir = 'x86'
++elif host_machine.cpu_family().startswith('arm') or host_machine.cpu_family().startswith('aarch')
++	arch_subdir = 'arm'
++elif host_machine.cpu_family().startswith('ppc')
++	arch_subdir = 'ppc'
++endif
++
+ # configure the build, and make sure configs here and in config folder are
+ # able to be included in any file. We also store a global array of include dirs
+ # for passing to pmdinfogen scripts
+ global_inc = include_directories('.', 'config',
+ 	'lib/librte_eal/common/include',
+ 	'lib/librte_eal/@0@/eal/include'.format(host_machine.system()),
++    'lib/librte_eal/common/include/arch/@0@'.format(arch_subdir),
+ )
+ subdir('config')
+ 
+diff --git a/mk/rte.app.mk b/mk/rte.app.mk
+index 05ea034..aba27a8 100644
+--- a/mk/rte.app.mk
++++ b/mk/rte.app.mk
+@@ -49,13 +49,13 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_FIB)            += -lrte_fib
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_RIB)            += -lrte_rib
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_LPM)            += -lrte_lpm
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_ACL)            += -lrte_acl
+-_LDLIBS-$(CONFIG_RTE_LIBRTE_TELEMETRY)      += --no-as-needed
+-_LDLIBS-$(CONFIG_RTE_LIBRTE_TELEMETRY)      += --whole-archive
+-_LDLIBS-$(CONFIG_RTE_LIBRTE_TELEMETRY)      += -lrte_telemetry -ljansson
+-_LDLIBS-$(CONFIG_RTE_LIBRTE_TELEMETRY)      += --no-whole-archive
+-_LDLIBS-$(CONFIG_RTE_LIBRTE_TELEMETRY)      += --as-needed
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_JOBSTATS)       += -lrte_jobstats
++_LDLIBS-$(CONFIG_RTE_LIBRTE_METRICS)        += --whole-archive
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_METRICS)        += -lrte_metrics
++ifeq ($(CONFIG_RTE_LIBRTE_TELEMETRY),y)
++_LDLIBS-$(CONFIG_RTE_LIBRTE_METRICS)        += -ljansson
++endif
++_LDLIBS-$(CONFIG_RTE_LIBRTE_METRICS)        += --no-whole-archive
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_BITRATE)        += -lrte_bitratestats
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_LATENCY_STATS)  += -lrte_latencystats
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_POWER)          += -lrte_power
+@@ -77,6 +77,7 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_HASH)           += -lrte_hash
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_MEMBER)         += -lrte_member
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_VHOST)          += -lrte_vhost
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_KVARGS)         += -lrte_kvargs
++_LDLIBS-y                                   += -lrte_telemetry
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_MBUF)           += -lrte_mbuf
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_NET)            += -lrte_net
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_ETHER)          += -lrte_ethdev
+diff --git a/mk/target/generic/rte.vars.mk b/mk/target/generic/rte.vars.mk
+index 3747221..ec26728 100644
+--- a/mk/target/generic/rte.vars.mk
++++ b/mk/target/generic/rte.vars.mk
+@@ -105,6 +105,7 @@ CFLAGS += -DRTE_USE_FUNCTION_VERSIONING
+ ifeq ($(BUILDING_RTE_SDK),1)
+ # building sdk
+ CFLAGS += -include $(RTE_OUTPUT)/include/rte_config.h
++CFLAGS += -DALLOW_EXPERIMENTAL_API
+ else
+ # if we are building an external application, include SDK's lib and
+ # includes too
+diff --git a/usertools/dpdk-telemetry.py b/usertools/dpdk-telemetry.py
+new file mode 100755
+index 0000000..afbf01b
+--- /dev/null
++++ b/usertools/dpdk-telemetry.py
+@@ -0,0 +1,83 @@
++#! /usr/bin/python3
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright(c) 2020 Intel Corporation
++
++"""
++Script to be used with V2 Telemetry.
++Allows the user input commands and read the Telemetry response.
++"""
++
++import socket
++import os
++import glob
++import json
++import readline
++
++# global vars
++TELEMETRY_VERSION = "v2"
++CMDS = []
++
++
++def read_socket(sock, buf_len, echo=True):
++    """ Read data from socket and return it in JSON format """
++    reply = sock.recv(buf_len).decode()
++    try:
++        ret = json.loads(reply)
++    except json.JSONDecodeError:
++        print("Error in reply: ", reply)
++        sock.close()
++        raise
++    if echo:
++        print(json.dumps(ret))
++    return ret
++
++
++def handle_socket(path):
++    """ Connect to socket and handle user input """
++    sock = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
++    global CMDS
++    print("Connecting to " + path)
++    try:
++        sock.connect(path)
++    except OSError:
++        print("Error connecting to " + path)
++        sock.close()
++        return
++    json_reply = read_socket(sock, 1024)
++    output_buf_len = json_reply["max_output_len"]
++
++    # get list of commands for readline completion
++    sock.send("/".encode())
++    CMDS = read_socket(sock, output_buf_len, False)["/"]
++
++    # interactive prompt
++    text = input('--> ').strip()
++    while text != "quit":
++        if text.startswith('/'):
++            sock.send(text.encode())
++            read_socket(sock, output_buf_len)
++        text = input('--> ').strip()
++    sock.close()
++
++
++def readline_complete(text, state):
++    """ Find any matching commands from the list based on user input """
++    all_cmds = ['quit'] + CMDS
++    if text:
++        matches = [c for c in all_cmds if c.startswith(text)]
++    else:
++        matches = all_cmds
++    return matches[state]
++
++
++readline.parse_and_bind('tab: complete')
++readline.set_completer(readline_complete)
++readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
++
++# Path to sockets for processes run as a root user
++for f in glob.glob('/var/run/dpdk/*/dpdk_telemetry.%s' % TELEMETRY_VERSION):
++    handle_socket(f)
++# Path to sockets for processes run as a regular user
++for f in glob.glob('/run/user/%d/dpdk/*/dpdk_telemetry.%s' %
++                   (os.getuid(), TELEMETRY_VERSION)):
++    handle_socket(f)
+diff --git a/usertools/meson.build b/usertools/meson.build
+index 149e788..64e2723 100644
+--- a/usertools/meson.build
++++ b/usertools/meson.build
+@@ -1,4 +1,4 @@
+ # SPDX-License-Identifier: BSD-3-Clause
+ # Copyright(c) 2017 Intel Corporation
+ 
+-install_data(['dpdk-devbind.py', 'dpdk-pmdinfo.py'], install_dir: 'bin')
++install_data(['dpdk-devbind.py', 'dpdk-pmdinfo.py', 'dpdk-telemetry.py'], install_dir: 'bin')
+-- 
+2.7.4
+
