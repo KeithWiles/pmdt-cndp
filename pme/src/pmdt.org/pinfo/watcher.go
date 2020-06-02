@@ -5,14 +5,14 @@ package pinfo
 
 import (
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"github.com/fsnotify/fsnotify"
 
 	tlog "pmdt.org/ttylog"
 )
@@ -161,13 +161,14 @@ func (pi *ProcessInfo) Remove(name string) {
 func (pi *ProcessInfo) addFile(name, dir string) {
 
 	if strings.HasPrefix(filepath.Base(name), pi.baseName) {
-		ext := filepath.Ext(name)
 
-		pid, err := strconv.ParseInt(ext[1:], 10, 64)
-		if err != nil {
-			tlog.WarnPrintf("uable to parse pid from filename %s\n", name)
-			return
-		}
+		/*
+			ext := filepath.Ext(name)
+			pid, err := strconv.ParseInt(ext[1:], 10, 64)
+			if err != nil {
+				tlog.WarnPrintf("unable to parse pid from filename %s\n", name)
+				return
+			} */
 
 		var path string
 		if dir == "" {
@@ -175,7 +176,7 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 		} else {
 			path = pi.basePath + "/" + dir + "/" + name
 		}
-		if a, ok := pi.connInfo[pid]; ok {
+		if a, ok := pi.connInfo[path]; ok {
 			a.valid = true
 			return
 		}
@@ -188,10 +189,12 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 			log.Fatalf("connection to socket failed: %v", err)
 		}
 
-		ap := &ConnInfo{valid: true, Pid: pid, Path: path, conn: conn}
+		ap := &ConnInfo{valid: true, Pid: -1, Path: path, conn: conn}
+
+		//ap := &ConnInfo{valid: true, Pid: pid, Path: path, conn: conn}
 
 		// Add the ConnInfo to the internal map structures
-		pi.connInfo[pid] = ap
+		pi.connInfo[path] = ap
 	}
 }
 
@@ -222,6 +225,7 @@ func (pi *ProcessInfo) scan() {
 			}
 
 			for _, file := range appFiles {
+				// loooking for dpdk_telemetry as base filename
 				if strings.HasPrefix(filepath.Base(file.Name()), pi.baseName) {
 					pi.addFile(file.Name(), entry.Name())
 				}
@@ -235,7 +239,7 @@ func (pi *ProcessInfo) scan() {
 	for _, a := range pi.connInfo {
 		if !a.valid {
 			a.conn.Close()
-			delete(pi.connInfo, a.Pid)
+			delete(pi.connInfo, a.Path)
 		}
 	}
 }

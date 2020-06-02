@@ -6,9 +6,10 @@ package pinfo
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"net"
 	"sync"
+
+	"github.com/fsnotify/fsnotify"
 
 	tlog "pmdt.org/ttylog"
 )
@@ -22,7 +23,7 @@ type ConnInfo struct {
 }
 
 // ConnInfoMap holds all of the process info data
-type ConnInfoMap map[int64]*ConnInfo
+type ConnInfoMap map[string]*ConnInfo
 
 // CallbackMap holds the watcher fsnotify callback information
 type CallbackMap map[string]*Callback

@@ -45,7 +45,7 @@ func init() {
 	tlog.states[ErrorLog] = true
 	tlog.states[WarnLog] = true
 	tlog.states[InfoLog] = true
-	tlog.states[DebugLog] = false
+	tlog.states[DebugLog] = true
 }
 
 // logger go function to log data to tty

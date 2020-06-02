@@ -192,6 +192,12 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 func (pg *DPDKPanel) selectedConnection() (*pinfo.ConnInfo, error) {
 
+	tlog.DebugPrintf("Value: %v\n", pg.selectApp.ItemValue())
+	test := pg.selectApp.ItemValue()
+	if test == nil {
+		return nil, fmt.Errorf("I am not selected")
+	}
+	
 	pid, err := strconv.ParseInt(pg.selectApp.ItemValue().(string), 10, 64)
 	if err != nil {
 		return nil, err
