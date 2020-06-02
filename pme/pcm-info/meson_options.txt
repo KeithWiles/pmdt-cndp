@@ -1,4 +1,4 @@
 # Please keep these options sorted alphabetically.
 
-option('opcm_dir', type: 'string', value: '/home/sklober/pcm',
+option('opcm_dir', type: 'string', value: '/work/projects/intel/pmdt/opcm',
 	description: 'path to the OPCM files')
