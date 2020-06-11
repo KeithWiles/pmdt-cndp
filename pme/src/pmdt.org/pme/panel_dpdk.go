@@ -223,7 +223,7 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 func (pg *DPDKPanel) getFixedData(a *pinfo.ConnInfo) {
 
 	pg.infoDPDK.Version = pg.pinfoDPDK.Version(a)
-	tlod.DebugPrintf("EAL Version: %s\n", pg.infoDPDKVersion)
+	tlog.DebugPrintf("EAL Version: %s\n", pg.infoDPDK.Version)
 
 	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/params", &pg.infoDPDK.Params); err != nil {
 		tlog.ErrorPrintf("Unable to get EAL Parameters: %v\n", err)
