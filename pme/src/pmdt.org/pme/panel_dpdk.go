@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	//"strconv"
 	"sync"
 
 	"github.com/rivo/tview"
@@ -197,13 +196,6 @@ func (pg *DPDKPanel) selectedConnection() (*pinfo.ConnInfo, error) {
 		return nil, fmt.Errorf("I am not selected")
 	}
 
-	/*
-		pid, err := strconv.ParseInt(pg.selectApp.ItemValue().(string), 10, 64)
-		if err != nil {
-			return nil, err
-		}
-	*/
-
 	// Find the current selected application if any are available
 	a := pg.pinfoDPDK.ConnectionByProcessName(selectedName.(string))
 	if a == nil {
@@ -231,9 +223,7 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 func (pg *DPDKPanel) getFixedData(a *pinfo.ConnInfo) {
 
 	pg.infoDPDK.Version = pg.pinfoDPDK.Version(a)
-	tlog.DebugPrintf("This is the version %s\n", pg.infoDPDK.Version)
-
-	//tlog.DebugPrintf("EAL Version: %v\n", pg.infoDPDK.Version.Version)
+	tlod.DebugPrintf("EAL Version: %s\n", pg.infoDPDKVersion)
 
 	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/params", &pg.infoDPDK.Params); err != nil {
 		tlog.ErrorPrintf("Unable to get EAL Parameters: %v\n", err)

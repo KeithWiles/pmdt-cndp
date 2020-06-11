@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
-	//"honnef.co/go/tools/version"
 
 	tlog "pmdt.org/ttylog"
 )
