@@ -5,8 +5,7 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-	"strconv"
+	//"strconv"
 	"sync"
 
 	"github.com/rivo/tview"
@@ -139,8 +138,8 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	pg.pinfoDPDK.Add("panel_dpdk", func(event int) {
 		names := make([]interface{}, 0)
 
-		for _, f := range pg.pinfoDPDK.Files() {
-			names = append(names, filepath.Ext(f)[1:]) // Only display the PID
+		for _, f := range pg.pinfoDPDK.Processes() {
+			names = append(names, f) // Only display the ProcessName
 		}
 		pg.selectApp.UpdateItem(-1, -1)
 		pg.selectApp.AddColumn(-1, names)
@@ -192,19 +191,21 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 func (pg *DPDKPanel) selectedConnection() (*pinfo.ConnInfo, error) {
 
-	tlog.DebugPrintf("Value: %v\n", pg.selectApp.ItemValue())
-	test := pg.selectApp.ItemValue()
-	if test == nil {
+	tlog.DebugPrintf("Value: %v\n", pg.selectApp.ItemValue()) // name of DPDK App
+	selectedName := pg.selectApp.ItemValue()
+	if selectedName == nil {
 		return nil, fmt.Errorf("I am not selected")
 	}
-	
-	pid, err := strconv.ParseInt(pg.selectApp.ItemValue().(string), 10, 64)
-	if err != nil {
-		return nil, err
-	}
+
+	/*
+		pid, err := strconv.ParseInt(pg.selectApp.ItemValue().(string), 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	// Find the current selected application if any are available
-	a := pg.pinfoDPDK.ConnectionByPid(pid)
+	a := pg.pinfoDPDK.ConnectionByProcessName(selectedName.(string))
 	if a == nil {
 		return nil, fmt.Errorf("failed to get connection pointer")
 	}
@@ -229,11 +230,10 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 
 func (pg *DPDKPanel) getFixedData(a *pinfo.ConnInfo) {
 
-	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/version", &pg.infoDPDK.Version); err != nil {
-		tlog.ErrorPrintf("Unable to get EAL version: %v\n", err)
-		return
-	}
-	tlog.DebugPrintf("EAL Version: %v\n", pg.infoDPDK.Version.Version)
+	pg.infoDPDK.Version = pg.pinfoDPDK.Version(a)
+	tlog.DebugPrintf("This is the version %s\n", pg.infoDPDK.Version)
+
+	//tlog.DebugPrintf("EAL Version: %v\n", pg.infoDPDK.Version.Version)
 
 	if err := pg.pinfoDPDK.Unmarshal(a, "/eal/params", &pg.infoDPDK.Params); err != nil {
 		tlog.ErrorPrintf("Unable to get EAL Parameters: %v\n", err)
@@ -289,6 +289,7 @@ func (pg *DPDKPanel) collectStats() {
 
 	a, err := pg.selectedConnection()
 	if err != nil {
+		tlog.DebugPrintf("No connection selected %s\n", err)
 		return
 	}
 	pg.getFixedData(a)
@@ -307,8 +308,7 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 
 	info := pg.infoDPDK
 	// Set the speed/duplex and rate in the window
-	str := fmt.Sprintf("%s: %s\n",
-		cz.Orange("DPDK Verison", w), cz.LightGreen(info.Version.Version))
+	str := fmt.Sprintf("%s: %s\n", cz.Orange("DPDK Version", w), cz.LightGreen(info.Version))
 
 	// Dump out the DPDK and application args
 	str += fmt.Sprintf("%s: %s\n", cz.Orange("DPDK Options", w), cz.LightGreen(info.Params.Params))

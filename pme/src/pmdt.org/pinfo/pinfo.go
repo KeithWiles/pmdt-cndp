@@ -10,16 +10,20 @@ import (
 	"sync"
 
 	"github.com/fsnotify/fsnotify"
+	//"honnef.co/go/tools/version"
 
 	tlog "pmdt.org/ttylog"
 )
 
 // ConnInfo - Information about the app
 type ConnInfo struct {
-	valid bool // true if the process info data is valid
-	conn  *net.UnixConn
-	Pid   int64  // Pid for the process
-	Path  string // Path of the process_pinfo.<pid> file
+	valid       bool // true if the process info data is valid
+	conn        *net.UnixConn
+	Pid         int64  // Pid for the process
+	Path        string // Path of the process_pinfo.<pid> file
+	ProcessName string // Directory name of the telemetry file
+	DPDKVersion string
+	MaxOutput   int64
 }
 
 // ConnInfoMap holds all of the process info data
@@ -60,8 +64,11 @@ func New(bpath, bname string) *ProcessInfo {
 // doCmd information
 func (pi *ProcessInfo) doCmd(a *ConnInfo, cmd string) ([]byte, error) {
 
-	if _, err := a.conn.Write([]byte(cmd)); err != nil {
-		return nil, fmt.Errorf("write on socket failed: %v", err)
+	// if string is empty do not write, but continue with read
+	if len(cmd) > 0 {
+		if _, err := a.conn.Write([]byte(cmd)); err != nil {
+			return nil, fmt.Errorf("write on socket failed: %v", err)
+		}
 	}
 
 	buf := make([]byte, maxBufferSize) // big buffer
@@ -95,6 +102,17 @@ func (pi *ProcessInfo) Files() []string {
 	return files
 }
 
+// Processes returns a string slice of application process info data
+func (pi *ProcessInfo) Processes() []string {
+
+	files := []string{}
+	for _, a := range pi.connInfo {
+		files = append(files, a.ProcessName)
+	}
+
+	return files
+}
+
 // Pids returns a int64 slice of application process info data
 func (pi *ProcessInfo) Pids() []int64 {
 
@@ -111,6 +129,17 @@ func (pi *ProcessInfo) ConnectionByPid(pid int64) *ConnInfo {
 
 	for _, a := range pi.connInfo {
 		if a.Pid == pid {
+			return a
+		}
+	}
+	return nil
+}
+
+// ConnectionByProcessName returns the ConnInfo pointer using the Pid
+func (pi *ProcessInfo) ConnectionByProcessName(ProcessName string) *ConnInfo {
+
+	for _, a := range pi.connInfo {
+		if a.ProcessName == ProcessName {
 			return a
 		}
 	}
@@ -147,4 +176,14 @@ func (pi *ProcessInfo) Unmarshal(p *ConnInfo, command string, data interface{}) 
 func (pi *ProcessInfo) Marshal(data interface{}) ([]byte, error) {
 
 	return json.MarshalIndent(data, "", "  ")
+}
+
+// Version takes process info version and passes back string
+func (pi *ProcessInfo) Version(p *ConnInfo) string {
+	return p.DPDKVersion
+}
+
+// PID takes process info pid and passes back int64
+func (pi *ProcessInfo) PID(p *ConnInfo) int64 {
+	return p.Pid
 }
