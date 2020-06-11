@@ -139,14 +139,9 @@ type CmdList struct {
 	Cmds []string `json:"/"`
 }
 
-// EALVersion string and information
-type EALVersion struct {
-	Version string `json:"/eal/version"`
-}
-
 // Information and information about a DPDK instance
 type Information struct {
-	Version     EALVersion
+	Version     string
 	Cmds        CmdList   // List of all known commands
 	Params      EALParams // Holds the EAL parameter data
 	AppParams   AppParams // Holds the EAL parameter data
