@@ -47,8 +47,6 @@ def handle_socket(path):
         if text.startswith('/'):
             fd.send(text.encode())
             read_socket(fd, output_buf_len)
-            # reply = json.loads(fd.recv(1024 * 12).decode())
-            # print(json.dumps(reply))
         text = input('--> ').strip()
     fd.close()
 
