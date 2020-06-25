@@ -88,12 +88,13 @@ list_cmd(pinfo_client_t _c)
     struct pinfo_client *c = _c;
     int i;
 
+    pinfo_append(c, "{ \"/\":");
     pinfo_append(c, "[");
     for (i = 0; i < pinfo.num_callbacks; i++)
         pinfo_append(c, "\"%s\"%s",
             pinfo.callbacks[i].cmd, ((i + 1) < pinfo.num_callbacks)? "," : "");
     pinfo_append(c, "]");
-
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -101,10 +102,11 @@ static int
 info_cmd(pinfo_client_t _c)
 {
     struct pinfo_client *c = _c;
-
-    pinfo_append(c, "{ \"version\": \"%s\"", "1.0.1");
-    pinfo_append(c, ",\"maxbuffer\": %d }", PINFO_MAX_BUF_LEN);
-
+    pinfo_append(c, "{ \"/pcm/info\":");
+    pinfo_append(c, "{\"pid\": %d,", getpid());
+    pinfo_append(c, "\"version\": \"%s\",", "1.0.5");
+    pinfo_append(c, "\"maxbuffer\": %d }", PINFO_MAX_BUF_LEN);
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -113,11 +115,13 @@ invalid_cmd(pinfo_client_t _c)
 {
     struct pinfo_client *c = _c;
 
+    pinfo_append(c, "{ \"error\"");
     if (c->params)
-        pinfo_append(c, "\"error\": \"invalid cmd (%s,%s)\"", c->cmd, c->params);
+        pinfo_append(c, ": \"invalid cmd (%s,%s)\"", c->cmd, c->params);
     else
-        pinfo_append(c, "\"error\": \"invalid cmd (%s)\"", c->cmd);
+        pinfo_append(c, ": \"invalid cmd (%s)\"", c->cmd);
 
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -146,7 +150,16 @@ static void *
 client_handler(void *sock_id)
 {
     int bytes, i, s = (int)(uintptr_t)sock_id;
+    char info_str[1024];
     struct pinfo_client *c;
+
+    snprintf(info_str, sizeof(info_str),
+                        "{\"version\":\"1.0.5\",\"pid\":%d,\"max_output_len\":%d}",
+                        getpid(), PINFO_MAX_BUF_LEN);
+    if (write(s, info_str, strlen(info_str)) < 0) {
+        close(s);
+        return NULL;
+    }
 
     c = calloc(1, sizeof(struct pinfo_client));
     if (!c)

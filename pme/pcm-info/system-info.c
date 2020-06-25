@@ -26,6 +26,7 @@ headerInfo(void *_c)
 {
     struct pinfo_client *c = _c;
 
+    pinfo_append(c, "{\"/pcm/header\": ");
     pinfo_append(c, "{");
     pinfo_append(c, "\"version\": \"%s\",", _shd->hdr.version);
     pinfo_append(c, "\"tscBegin\": %u,", _shd->hdr.tscBegin);
@@ -34,6 +35,7 @@ headerInfo(void *_c)
     pinfo_append(c, "\"timestamp\": %u,", _shd->hdr.timestamp);
     pinfo_append(c, "\"socketfd\": %u,", _shd->hdr.socketfd);
     pinfo_append(c, "\"pollMs\": %u", _shd->hdr.pollMs);
+    pinfo_append(c, "}");
     pinfo_append(c, "}");
 
     return 0;
@@ -44,6 +46,7 @@ systemInfo(void *_c)
 {
     struct pinfo_client *c = _c;
 
+    pinfo_append(c, "{\"/pcm/system\": ");
     pinfo_append(c, "{");
     pinfo_append(c, "\"numOfCores\": %u,", _shd->pcm.system.numOfCores);
     pinfo_append(c, "\"numOfOnlineCores\": %u,", _shd->pcm.system.numOfOnlineCores);
@@ -51,6 +54,7 @@ systemInfo(void *_c)
     pinfo_append(c, "\"numOfOnlineSockets\": %u,", _shd->pcm.system.numOfOnlineSockets);
     pinfo_append(c, "\"numOfQPILinksPerSocket\": %u,", _shd->pcm.system.numOfQPILinksPerSocket);
     pinfo_append(c, "\"cpuModel\": %u", _shd->pcm.system.cpuModel);
+    pinfo_append(c, "}");
     pinfo_append(c, "}");
 
     return 0;
@@ -63,12 +67,16 @@ pcmCore(void *_c)
     struct PCMCoreCounter *cc;
     int core;
 
+    pinfo_append(c, "{\"/pcm/core\": ");
+    // TODO: example of valid param
     if (c->params == NULL)
-        return -1;
+        pinfo_append(c, "null}");
+        return 0; // -1
 
     core = atoi(c->params);
     if (core < 0 || core > (_shd->pcm.system.numOfCores * _shd->pcm.system.numOfSockets))
-        return -1;
+        pinfo_append(c, "null}");
+        return 0; // -1
 
     cc = &_shd->pcm.core.cores[core];
 
@@ -98,6 +106,7 @@ pcmCore(void *_c)
     pinfo_append(c, "\"remoteMemoryAccesses\": %lu,", cc->remoteMemoryAccesses);
     pinfo_append(c, "\"thermalHeadroom\": %lu", cc->thermalHeadroom);
     pinfo_append(c, "}");
+    pinfo_append(c, "}");
 
     return 0;
 }
@@ -110,6 +119,7 @@ memoryCounters(void *_c)
     struct PCMMemorySocketCounter *sc;
     struct PCMMemoryChannelCounter *cc;
 
+    pinfo_append(c, "{\"/pcm/memory\": ");
     pinfo_append(c, "{");
     pinfo_append(c, "\"dramEnergyMetricsAvailable\": %s,",
         _shd->pcm.memory.dramEnergyMetricsAvailable? "true" : "false");
@@ -144,6 +154,7 @@ memoryCounters(void *_c)
     }
     pinfo_append(c, "}");
     pinfo_append(c, "}");
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -152,6 +163,7 @@ pcmCoreEnergyAvailable(void *_c)
 {
     struct pinfo_client *c = _c;
 
+    pinfo_append(c, "{\"/pcm/socket\": ");
     pinfo_append(c, "{");
     pinfo_append(c, "\"packageEnergyMetricsAvailable\": %s,",
         _shd->pcm.core.packageEnergyMetricsAvailable? "true" : "false");
@@ -162,6 +174,7 @@ pcmCoreEnergyAvailable(void *_c)
     }
     pinfo_append(c, "]");
     pinfo_append(c, "}");
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -170,6 +183,7 @@ qpiCounters(void *_c)
 {
     struct pinfo_client *c = _c;
 
+    pinfo_append(c, "{\"/pcm/qpi\": ");
     pinfo_append(c, "{");
     pinfo_append(c, "\"incomingQPITrafficMetricsAvailable\": %s,",
         _shd->pcm.qpi.incomingQPITrafficMetricsAvailable? "true" : "false");
@@ -210,6 +224,7 @@ qpiCounters(void *_c)
 
     pinfo_append(c, "]");
     pinfo_append(c, "}");
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -238,6 +253,8 @@ pcieEvents(void *_c)
     struct pinfo_client *c = _c;
     struct Sample_s *ps;
 
+    pinfo_append(c, "{\"/pcm/pcie\": ");
+
     pinfo_append(c, "{\"sockets\": {");
     for(int i = 0; i < _shd->pcm.system.numOfSockets; i++) {
         ps = &_shd->sample[i];
@@ -258,7 +275,7 @@ pcieEvents(void *_c)
     pcie_events(c, &_shd->aggregate);
     pinfo_append(c, "}");
     pinfo_append(c, "}");
-
+    pinfo_append(c, "}");
     return 0;
 }
 
