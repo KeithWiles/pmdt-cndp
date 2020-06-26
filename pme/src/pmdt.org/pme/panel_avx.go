@@ -29,7 +29,7 @@ type PageAVX struct {
 	selectionChanged bool
 	freqs            *graphdata.GraphInfo
 }
-
+       
 const (
 	avxPanelName string = "AVX"
 	maxAVXPoints int    = 120

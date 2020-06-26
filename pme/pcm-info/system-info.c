@@ -64,15 +64,17 @@ pcmCore(void *_c)
     int core;
 
     pinfo_append(c, "{\"/pcm/core\":{");
-    
-    if (c->params == NULL)
-        pinfo_append(c, "null}");
-        return 0; 
+
+	if (c->params == NULL) {
+		pinfo_append(c, "null}");
+        return 0;
+	}
 
     core = atoi(c->params);
-    if (core < 0 || core > (_shd->pcm.system.numOfCores * _shd->pcm.system.numOfSockets))
+    if (core < 0 || core > (_shd->pcm.system.numOfCores * _shd->pcm.system.numOfSockets)) {
         pinfo_append(c, "null}");
-        return 0; 
+        return 0;
+	}
 
     cc = &_shd->pcm.core.cores[core];
 
