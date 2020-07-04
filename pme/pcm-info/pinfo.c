@@ -16,6 +16,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <printf.h>
 
 #include "pinfo_private.h"
 #include "pinfo.h"
@@ -126,10 +127,7 @@ invalid_cmd(pinfo_client_t _c)
 static void
 perform_command(struct pinfo_client *c, pinfo_cb fn)
 {
-//    pinfo_append(c, "{ \"%s\": ", c->cmd);
-
     int ret = fn(c);
-//    pinfo_append(c, "}");
 
     if (ret < 0) {
         pinfo_append(c, "{null}");
@@ -243,12 +241,48 @@ _mkdir(const char *dir) {
     mkdir(tmp, DIR_PERMS);
 }
 
+static int
+print_quoted(FILE *stream, const struct printf_info *info, const void *const *args)
+{
+    const char *str = *((const char**)(args[0]));
+    return fprintf(stream, "\"%*s\"", (info->left ? -info->width : info->width), str);
+}
+
+static int
+print_quoted_arginfo(const struct printf_info *info, size_t n, int *argtypes, int *size)
+{
+    (void)info;
+    if (n > 0) {
+        argtypes[0] = PA_STRING;
+        size[0] = sizeof (char *);
+    }
+    return 1;
+}
+
+#if 0
+int main(void)
+{
+    register_printf_specifier('W', print_widget, print_widget_arginfo);
+
+    Widget widget { "foobar" };
+
+    #pragma GCC diagnostic ignored "-Wformat"
+    #pragma GCC diagnostic ignored "-Wformat-extra-args"
+
+    printf("|%W|\n", &widget);
+    printf("|%35W|\n", &widget);
+    printf("|%-35W|\n", &widget);
+}
+#endif
+
 int
 pinfo_init(const char *runtime_dir, const char *prefix, const char **err_str)
 {
     pthread_t t;
     mode_t old;
     const char *dir, *pre;
+
+    register_printf_specifier('Q', print_quoted, print_quoted_arginfo);
 
     if (!prefix || (strlen(prefix) == 0) || (prefix[0] == '\0'))
         pre = DEFAULT_SOCKET_FILE_PREFIX;
