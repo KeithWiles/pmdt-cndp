@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <printf.h>
 
+#include "common.h"
 #include "pinfo_private.h"
 #include "pinfo.h"
 
@@ -89,9 +90,9 @@ list_cmd(pinfo_client_t _c)
     struct pinfo_client *c = _c;
     int i;
 
-    pinfo_append(c, "{\"/\":[");
+    pinfo_append(c, "{%Q:[", c->cmd);
     for (i = 0; i < pinfo.num_callbacks; i++)
-        pinfo_append(c, "\"%s\"%s",
+        pinfo_append(c, "%Q%s",
             pinfo.callbacks[i].cmd, ((i + 1) < pinfo.num_callbacks)? "," : "");
     pinfo_append(c, "]}");
     return 0;
@@ -101,10 +102,10 @@ static int
 info_cmd(pinfo_client_t _c)
 {
     struct pinfo_client *c = _c;
-    pinfo_append(c, "{\"/pcm/info\":");
-    pinfo_append(c, "{\"pid\":%d,", getpid());
-    pinfo_append(c, "\"version\":\"%s\",", "1.0.5");
-    pinfo_append(c, "\"maxbuffer\":%d}", PINFO_MAX_BUF_LEN);
+    pinfo_append(c, "{%Q:", c->cmd);
+    pinfo_append(c, "{%Q:%d,", "pid", getpid());
+    pinfo_append(c, "%Q:%Q,", "version", VERSION);
+    pinfo_append(c, "%Q:%d}", "maxbuffer", PINFO_MAX_BUF_LEN);
     pinfo_append(c, "}");
     return 0;
 }
@@ -114,7 +115,7 @@ invalid_cmd(pinfo_client_t _c)
 {
     struct pinfo_client *c = _c;
 
-    pinfo_append(c, "{\"error\":");
+    pinfo_append(c, "{%Q:", "error");
     if (c->params)
         pinfo_append(c, "\"invalid cmd (%s,%s)\"", c->cmd, c->params);
     else
@@ -150,8 +151,8 @@ client_handler(void *sock_id)
     struct pinfo_client *c;
 
     snprintf(info_str, sizeof(info_str),
-                        "{\"version\":\"1.0.5\",\"pid\":%d,\"max_output_len\":%d}",
-                        getpid(), PINFO_MAX_BUF_LEN);
+                        "{%Q:%Q,%Q:%d,%Q:%d}", "version", VERSION,
+                        "pid", getpid(), "max_output_len", PINFO_MAX_BUF_LEN);
     if (write(s, info_str, strlen(info_str)) < 0) {
         close(s);
         return NULL;
@@ -258,22 +259,6 @@ print_quoted_arginfo(const struct printf_info *info, size_t n, int *argtypes, in
     }
     return 1;
 }
-
-#if 0
-int main(void)
-{
-    register_printf_specifier('W', print_widget, print_widget_arginfo);
-
-    Widget widget { "foobar" };
-
-    #pragma GCC diagnostic ignored "-Wformat"
-    #pragma GCC diagnostic ignored "-Wformat-extra-args"
-
-    printf("|%W|\n", &widget);
-    printf("|%35W|\n", &widget);
-    printf("|%-35W|\n", &widget);
-}
-#endif
 
 int
 pinfo_init(const char *runtime_dir, const char *prefix, const char **err_str)
