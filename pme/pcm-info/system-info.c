@@ -121,7 +121,7 @@ memoryCounters(void *_c)
     mc = &_shd->pcm.memory.system;
     pinfo_append(c, "%Q:[%f,%f,%f],", "system", mc->read, mc->write, mc->total);
 
-    pinfo_append(c, "\"sockets\":{");
+    pinfo_append(c, "%Q:{", "sockets");
     for(int i = 0; i < _shd->pcm.system.numOfSockets; i++) {
         sc = &_shd->pcm.memory.sockets[i];
 
