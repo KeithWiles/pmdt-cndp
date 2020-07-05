@@ -20,14 +20,10 @@ in this semi-graphic format is provided by gdamore/tcell and rivo/tview packages
 hosted on github.com.
 
 The tool will attempt to locate DPDK applications if these application are using
-the DPDK process info patch or library to gather information about the DPDK apps.
-The process info library creates a socket at location /var/run/dpdk/rte/process_info.<pid>
+the DPDK 20.05 telemetry library to gather information about the DPDK apps.
+The telemetry library creates a socket at location /var/run/dpdk/rte/*
 
-A patch set is provided in the patches directory applied to a current version of DPDK 20.02-rc1
-to enable the process info library. Rebuild DPDK and any application stared will now have
-the process_info.<pid> socket created.
-
-The pme tools also needs access to the PMU registers and need to run as sudo application.
+The pme tools also needs access to the PMU/MSR registers and needs to run as sudo application.
 The 'pme_run' script handles building and executing the Go application.
 
 Read the setup-build.txt file for more install instructions in the PME directory.
