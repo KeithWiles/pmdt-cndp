@@ -17,8 +17,8 @@ import (
 // Older system like Ubuntu do not have the kernel modules loaded or avaiable.
 // Ubuntu 18.04 does have the files in the /sys directory.
 
-// PagePBF - Data for Power Base Frequency
-type PagePBF struct {
+// PageAVX - Data for AVX - Power Base Frequency
+type PageAVX struct {
 	tabOrder         *tab.Tab
 	topFlex          *tview.Flex
 	title            *tview.Box
@@ -29,20 +29,20 @@ type PagePBF struct {
 	selectionChanged bool
 	freqs            *graphdata.GraphInfo
 }
-
+       
 const (
-	pbfPanelName string = "PBF"
-	maxPBFPoints int    = 120
+	avxPanelName string = "AVX"
+	maxAVXPoints int    = 120
 )
 
 // Setup and create the PBF page structure
-func setupPBF() *PagePBF {
+func setupAVX() *PageAVX {
 
-	pg := &PagePBF{}
+	pg := &PageAVX{}
 
 	pg.freqs = graphdata.NewGraph(NumCPUs())
 	for _, gd := range pg.freqs.Graphs() {
-		gd.SetMaxPoints(maxPBFPoints)
+		gd.SetMaxPoints(maxAVXPoints)
 	}
 	pg.freqs.SetFieldWidth(5)
 
@@ -51,12 +51,12 @@ func setupPBF() *PagePBF {
 	return pg
 }
 
-// PBFPanelSetup setup the main event page
-func PBFPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) {
+// AVXPanelSetup setup the main event page
+func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) {
 
-	pg := setupPBF()
+	pg := setupAVX()
 
-	to := tab.New(pbfPanelName, perfmon.app)
+	to := tab.New(avxPanelName, perfmon.app)
 	pg.tabOrder = to
 
 	// Flex boxes used to hold tview window types
@@ -72,7 +72,7 @@ func PBFPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	table := CreateTableView(flex1, "Core (c)", tview.AlignLeft, 12, 1, true)
 
 	// Select window setup and callback function when selection changes.
-	pg.selectCore = NewSelectWindow(table, "PBF", 0, func(row, col int) {
+	pg.selectCore = NewSelectWindow(table, "AVX", 0, func(row, col int) {
 
 		if row != pg.selected {
 			pg.selectCore.UpdateItem(row, col)
@@ -92,7 +92,7 @@ func PBFPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	}
 	pg.selectCore.AddColumn(-1, names, cz.SkyBlueColor)
 
-	pg.pbf = CreateTableView(flex1, "Power Base Frequency (p)", tview.AlignLeft, 0, 2, true)
+	pg.pbf = CreateTableView(flex1, "AVX Power Base Frequency (p)", tview.AlignLeft, 0, 2, true)
 	pg.pbf.SetFixed(1, 0)
 	pg.pbf.SetSeparator(tview.Borders.Vertical)
 
@@ -109,28 +109,28 @@ func PBFPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	to.SetInputDone()
 
 	// Create timer and callback function to display and process PBF data
-	perfmon.timers.Add(pbfPanelName, func(step int, ticks uint64) {
-		// up to 4 cases, done every second
+	perfmon.timers.Add(avxPanelName, func(step int, ticks uint64) {
+		// up to 4 cases, done every second 
 		switch step {
 		case 0:
 			pg.collectChartData()
 		case 1:
 			if pg.topFlex.HasFocus() {
 				perfmon.app.QueueUpdateDraw(func() {
-					pg.displayPBFPage()
+					pg.displayAVXPage()
 				})
 			}
 		}
 
 	})
 
-	return pbfPanelName, pg.topFlex
+	return avxPanelName, pg.topFlex
 }
 
 // Display the PBF data in the windows created
-func (pg *PagePBF) displayPBFPage() {
+func (pg *PageAVX) displayAVXPage() {
 
-	pg.displayPBF(pg.pbf)
+	pg.displayAVX(pg.pbf)
 	pg.displayFreqChart()
 
 	if pg.selectionChanged {
@@ -142,7 +142,7 @@ func (pg *PagePBF) displayPBFPage() {
 }
 
 // Collect the graph data to be displayed in the chart window
-func (pg *PagePBF) collectChartData() {
+func (pg *PageAVX) collectChartData() {
 
 	for cpu, gd := range pg.freqs.Graphs() {
 		p := pbf.InfoPerCPU(cpu)
@@ -153,7 +153,7 @@ func (pg *PagePBF) collectChartData() {
 }
 
 // Display the PBF data in the table view
-func (pg *PagePBF) displayPBF(view *tview.Table) {
+func (pg *PageAVX) displayAVX(view *tview.Table) {
 
 	// create the headers for each column
 	SetCell(pg.pbf, 0, 0, cz.Orange("CPU", 4))
@@ -186,7 +186,7 @@ func (pg *PagePBF) displayPBF(view *tview.Table) {
 }
 
 // Display the Frequency values in the text view using a graph or chart
-func (pg *PagePBF) displayFreqChart() {
+func (pg *PageAVX) displayFreqChart() {
 
 	pg.chart.SetText(pg.freqs.MakeChart(pg.chart, pg.selected, pg.selected))
 }

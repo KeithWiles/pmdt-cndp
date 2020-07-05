@@ -4,15 +4,16 @@
 package pinfo
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
+
+	"github.com/fsnotify/fsnotify"
 
 	tlog "pmdt.org/ttylog"
 )
@@ -23,6 +24,13 @@ const (
 	AppCreated = iota
 	AppRemoved = iota
 )
+
+// TelemetryVersion string and information
+type TelemetryVersion struct {
+	Pid         int64  `json: "pid"`
+	MaxOutput   int64  `json:"max_output_len"`
+	DPDKVersion string `json:"version"`
+}
 
 // Callback structure and data
 type Callback struct {
@@ -161,21 +169,19 @@ func (pi *ProcessInfo) Remove(name string) {
 func (pi *ProcessInfo) addFile(name, dir string) {
 
 	if strings.HasPrefix(filepath.Base(name), pi.baseName) {
-		ext := filepath.Ext(name)
 
-		pid, err := strconv.ParseInt(ext[1:], 10, 64)
-		if err != nil {
-			tlog.WarnPrintf("uable to parse pid from filename %s\n", name)
-			return
-		}
+		/*
+			ext := filepath.Ext(name)
+			pid, err := strconv.ParseInt(ext[1:], 10, 64)
+			if err != nil {
+				tlog.WarnPrintf("unable to parse pid from filename %s\n", name)
+				return
+			} */
 
 		var path string
-		if dir == "" {
-			path = pi.basePath + "/" + name
-		} else {
-			path = pi.basePath + "/" + dir + "/" + name
-		}
-		if a, ok := pi.connInfo[pid]; ok {
+		path = pi.basePath + "/" + dir + "/" + name
+
+		if a, ok := pi.connInfo[path]; ok {
 			a.valid = true
 			return
 		}
@@ -185,13 +191,37 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 		laddr := net.UnixAddr{Name: path, Net: t}
 		conn, err := net.DialUnix(t, nil, &laddr)
 		if err != nil {
-			log.Fatalf("connection to socket failed: %v", err)
+			//log.Printf("connection to socket failed: %v", err)
+			return
 		}
 
-		ap := &ConnInfo{valid: true, Pid: pid, Path: path, conn: conn}
+		// {"pid": 4464, "max_output_len": 16384, "version": "DPDK 20.05.0-rc2"}
+		// store in connection info
+		ap := &ConnInfo{valid: true, Pid: -1, Path: path, conn: conn, ProcessName: dir}
+
+		buf := make([]byte, maxBufferSize) // big buffer
+
+		n, err := conn.Read(buf)
+		if err != nil {
+			return
+		}
+		b := buf[:n]
+
+		//tlog.DebugPrintf("Data: %v\n", string(d))
+
+		tv := &TelemetryVersion{}
+		if err := json.Unmarshal(b, tv); err != nil {
+			// No connection data found
+			tlog.ErrorPrintf("Error parsing info from telemetry socket %v\n", err)
+			return
+		}
+
+		ap.Pid = tv.Pid
+		ap.MaxOutput = tv.MaxOutput
+		ap.DPDKVersion = tv.DPDKVersion
 
 		// Add the ConnInfo to the internal map structures
-		pi.connInfo[pid] = ap
+		pi.connInfo[path] = ap
 	}
 }
 
@@ -222,12 +252,11 @@ func (pi *ProcessInfo) scan() {
 			}
 
 			for _, file := range appFiles {
+				// loooking for dpdk_telemetry directory
 				if strings.HasPrefix(filepath.Base(file.Name()), pi.baseName) {
 					pi.addFile(file.Name(), entry.Name())
 				}
 			}
-		} else {
-			pi.addFile(entry.Name(), "")
 		}
 	}
 
@@ -235,7 +264,7 @@ func (pi *ProcessInfo) scan() {
 	for _, a := range pi.connInfo {
 		if !a.valid {
 			a.conn.Close()
-			delete(pi.connInfo, a.Pid)
+			delete(pi.connInfo, a.Path)
 		}
 	}
 }

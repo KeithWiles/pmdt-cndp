@@ -16,7 +16,9 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <printf.h>
 
+#include "common.h"
 #include "pinfo_private.h"
 #include "pinfo.h"
 
@@ -88,12 +90,11 @@ list_cmd(pinfo_client_t _c)
     struct pinfo_client *c = _c;
     int i;
 
-    pinfo_append(c, "[");
+    pinfo_append(c, "{%Q:[", c->cmd);
     for (i = 0; i < pinfo.num_callbacks; i++)
-        pinfo_append(c, "\"%s\"%s",
+        pinfo_append(c, "%Q%s",
             pinfo.callbacks[i].cmd, ((i + 1) < pinfo.num_callbacks)? "," : "");
-    pinfo_append(c, "]");
-
+    pinfo_append(c, "]}");
     return 0;
 }
 
@@ -101,10 +102,11 @@ static int
 info_cmd(pinfo_client_t _c)
 {
     struct pinfo_client *c = _c;
-
-    pinfo_append(c, "{ \"version\": \"%s\"", "1.0.1");
-    pinfo_append(c, ",\"maxbuffer\": %d }", PINFO_MAX_BUF_LEN);
-
+    pinfo_append(c, "{%Q:", c->cmd);
+    pinfo_append(c, "{%Q:%d,", "pid", getpid());
+    pinfo_append(c, "%Q:%Q,", "version", VERSION);
+    pinfo_append(c, "%Q:%d}", "maxbuffer", PINFO_MAX_BUF_LEN);
+    pinfo_append(c, "}");
     return 0;
 }
 
@@ -113,21 +115,20 @@ invalid_cmd(pinfo_client_t _c)
 {
     struct pinfo_client *c = _c;
 
+    pinfo_append(c, "{%Q:", "error");
     if (c->params)
-        pinfo_append(c, "\"error\": \"invalid cmd (%s,%s)\"", c->cmd, c->params);
+        pinfo_append(c, "\"invalid cmd (%s,%s)\"", c->cmd, c->params);
     else
-        pinfo_append(c, "\"error\": \"invalid cmd (%s)\"", c->cmd);
+        pinfo_append(c, "\"invalid cmd (%s)\"", c->cmd);
 
+    pinfo_append(c, "}");
     return 0;
 }
 
 static void
 perform_command(struct pinfo_client *c, pinfo_cb fn)
 {
-//    pinfo_append(c, "{ \"%s\": ", c->cmd);
-
     int ret = fn(c);
-//    pinfo_append(c, "}");
 
     if (ret < 0) {
         pinfo_append(c, "{null}");
@@ -146,7 +147,16 @@ static void *
 client_handler(void *sock_id)
 {
     int bytes, i, s = (int)(uintptr_t)sock_id;
+    char info_str[128];
     struct pinfo_client *c;
+
+    snprintf(info_str, sizeof(info_str),
+                        "{%Q:%Q,%Q:%d,%Q:%d}", "version", VERSION,
+                        "pid", getpid(), "max_output_len", PINFO_MAX_BUF_LEN);
+    if (write(s, info_str, strlen(info_str)) < 0) {
+        close(s);
+        return NULL;
+    }
 
     c = calloc(1, sizeof(struct pinfo_client));
     if (!c)
@@ -232,12 +242,32 @@ _mkdir(const char *dir) {
     mkdir(tmp, DIR_PERMS);
 }
 
+static int
+print_quoted(FILE *stream, const struct printf_info *info, const void *const *args)
+{
+    const char *str = *((const char**)(args[0]));
+    return fprintf(stream, "\"%*s\"", (info->left ? -info->width : info->width), str);
+}
+
+static int
+print_quoted_arginfo(const struct printf_info *info, size_t n, int *argtypes, int *size)
+{
+    (void)info;
+    if (n > 0) {
+        argtypes[0] = PA_STRING;
+        size[0] = sizeof (char *);
+    }
+    return 1;
+}
+
 int
 pinfo_init(const char *runtime_dir, const char *prefix, const char **err_str)
 {
     pthread_t t;
     mode_t old;
     const char *dir, *pre;
+
+    register_printf_specifier('Q', print_quoted, print_quoted_arginfo);
 
     if (!prefix || (strlen(prefix) == 0) || (prefix[0] == '\0'))
         pre = DEFAULT_SOCKET_FILE_PREFIX;

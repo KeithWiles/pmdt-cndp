@@ -19,8 +19,9 @@ opcm_dir = get_option('opcm_dir')
 add_project_arguments('-g', language: ['c', 'cpp'])
 add_project_arguments('-DPCM_USE_PERF', language: ['c', 'cpp'])
 add_project_arguments('-I' + opcm_dir, language: ['c', 'cpp'])
+add_project_arguments('-Wno-format', language: ['c', 'cpp'])
+add_project_arguments('-Wno-format-extra-args', language: ['c', 'cpp'])
 add_project_link_arguments('-pthread', language: ['c', 'cpp'])
-add_project_arguments('-std=c++0x', language: 'cpp')
 
 # check for libbsd
 if cc.find_library('libbsd', required: true).found()
