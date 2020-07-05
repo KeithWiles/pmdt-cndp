@@ -1,48 +1,65 @@
 # The PME setup instructions are draft only text and will need to be improved.
-# Please report any issues with the setup and build instructions or supply a 
+# Please report any issues with the setup and build instructions or supply a
 # patch to update these instructions.
 
-# On Ubuntu 19.10 install the following packages
-sudo apt install libbsd-dev libpcap-dev python3-pip pkg-config ninja-build
+# On Ubuntu 19.10 and 20.04 install the following packages
+sudo apt install libbsd-dev libpcap-dev python3-pip pkg-config meson ninja-build
 
-# Ninja needs to be at least version 1.9.0
-# Meson needs to be at least version 0.51.2
-
-git clone https://github.com/mesonbuild/meson.git
-
-# install meson with python3
-python3 setup.py install
+# Ninja needs to be at least version 1.10.0 as of 2020-07 in ubuntu 20.04
+# Meson needs to be at least version 0.53.2 as of 2020-07 in ubuntu 20.04
 
 # Install Go do not use apt-get as that is an older version
 # get the correct tar file from https://golang.org/dl/ and follow the instructions
 # I picked 1.13.7 release go1.13.7.linux-amd64.tar.gz but a newer version will work too
-# look at the site below for the latest version of Go
-wget https://dl.google.com/go/go1.13.7.linux-amd64.tar.gz
-tar -C /usr/local -xzf go1.13.7.linux-amd64.tar.gz
+# look at the site below for the latest version of Go as of 2020-07 version 1.14.3 is
+# available to use for PMDT.
 
-# Setup GOPATH to some location $HOME/go is one place
+# updated to 1.14.3 as of 2020-07
+wget https://dl.google.com/go/go1.14.3.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.14.3.linux-amd64.tar.gz
 
-# The current process info patch is in the patches directory.
-# Apply the patch to the 20.02-rc1 release of DPDK and build dpdk plus your application.
-# The patch is named process-info-dpdk-20.02.patch
+# Setup GOPATH to some location $HOME/go is one place follow the setup instructions
+# for Go and verify it is working.
 
-cd perfmon/pcm
-make
+# Download the PMDT source code.
+
+git clone http://dpdk.org/git/apps/pmdt
+
+# PMDT needs opcm to provide system information, which needs to be downloaded.
+# Download the code via git from git@github.com:opcm/pcm.git
+
+cd pmdt
+git clone git@github.com:opcm/pcm.git opcm
+cd opcm
+
+# Need to checkout an older version to get PME to build
+git co -b v202003 202003
+
+# The current DPDK version used by PMDT is 20.05 release, please download and use
+# this version with PMDT to work correctly.
+# Note: In the pmdt/pme/patches directory contains a patch for DPDK 19.11 and backports
+#       the new DPDK telemetry library to this version of DPDK.
+
+cd pmdt/pme/pcm-info
+meson build
+ninja -C build
 
 # install the standard Linux MSR module
 sudo modprobe msr
 
-# The script will run and create the mmap region for PME to access.
+# The following script at pmdt/pme/pme_run will run and create the local domain socket.
 # The script does not put the daemon in the background
-./doit
+./run_pcm
 
 # In a new xterm execute the pme tool. The pme_run script will build PME and execute it.
 # Note: Need to have an xterm with around 132 characters wide and 46 or more rows.
 
-cd perfmon/pme
+cd pmdt/pme
 ./pme_run
 
 # at this point you should have the tool running and using the function keys you
 # can display the different screens and data.
+# After you build applications using DPDK 20.05 and execute these applications you will
+# see the tools locating the DPDK applications and displaying the data provided.
 
-TODO: More details and instructions to be added.
+TODO: More details and instructions to be added .

@@ -1,6 +1,6 @@
-                      perfmon-go
+                   PMDT (Performance Monitor Data Toolkit)
 
-This directory contains the perfmon-go performance monitor code written in Go.
+This directory contains the 'pme' performance monitor code written in Go.
 
 The top level directory contains a script to help run the tool and you can do
 ./pme_run
@@ -8,7 +8,7 @@ or
 ./pme_run -p N
 
 Where N is the /dev/pts/N device, the script uses /dev/pts/0 for some crash
-reporting and will need to change if you use some other pts device.
+reporting and will need to change if you use some other pts device via an xterm.
 
 To get a screen of panels to view. The pme tool only needs an xterm to run as
 long as it supports VT100 ANSI escape codes and color is suggested for a better
@@ -27,7 +27,7 @@ A patch set is provided in the patches directory applied to a current version of
 to enable the process info library. Rebuild DPDK and any application stared will now have
 the process_info.<pid> socket created.
 
-The pme tools also need access to the PMU registers and need to run as sudo application.
+The pme tools also needs access to the PMU registers and need to run as sudo application.
 The 'pme_run' script handles building and executing the Go application.
 
 Read the setup-build.txt file for more install instructions in the PME directory.
