@@ -45,7 +45,7 @@ func init() {
 	tlog.states[ErrorLog] = true
 	tlog.states[WarnLog] = true
 	tlog.states[InfoLog] = true
-	tlog.states[DebugLog] = true
+	tlog.states[DebugLog] = false
 }
 
 // logger go function to log data to tty
@@ -97,7 +97,7 @@ func State(id string) (bool, error) {
 
 // SetState on a logid
 func SetState(id string, state bool) error {
-	state, ok := tlog.states[id]
+	_, ok := tlog.states[id]
 	if !ok {
 		return fmt.Errorf("unknown logid %s", id)
 	}
@@ -126,9 +126,9 @@ func IsActive(id string) bool {
 }
 
 // GetList returns the list of states and log ids
-func GetList() LogStates {
+func GetList() *LogStates {
 
-	return tlog.states
+	return &tlog.states
 }
 
 // FatalPrintf to print out fatal error messages

@@ -3,8 +3,8 @@
 
 package pcm
 
-// System information
-type System struct {
+// SystemData information
+type SystemData struct {
 	NumOfCores             uint64 `json:"numOfCores"`
 	NumOfOnlineCores       uint64 `json:"numOfOnlineCores"`
 	NumOfSockets           uint64 `json:"numOfSockets"`
@@ -13,8 +13,13 @@ type System struct {
 	CPUModel               uint64 `json:"cpuModel"`
 }
 
-// CoreCounters information
-type CoreCounters struct {
+// System command structure
+type System struct {
+	Data SystemData `json:"/pcm/system"`
+}
+
+// CoreCounterData information
+type CoreCounterData struct {
 	CoreID                    uint64  `json:"coreId"`
 	SocketID                  int64   `json:"socketId"`
 	L3CacheOccupancyAvailable bool    `json:"l3CacheOccupancyAvailable"`
@@ -39,6 +44,11 @@ type CoreCounters struct {
 	LocalMemoryAccesses       uint64  `json:"localMemoryAccesses"`
 	RemoteMemoryAccesses      uint64  `json:"remoteMemoryAccesses"`
 	ThermalHeadroom           uint64  `json:"thermalHeadroom"`
+}
+
+// CoreCounters data structure
+type CoreCounters struct {
+	Data CoreCounterData `json:"/pcm/core"`
 }
 
 // SocketEnergy information
@@ -135,8 +145,8 @@ type PCIeSampleData struct {
 	Aggregate PCIEvents             `json:"aggregate"`
 }
 
-// Header values in shared memory
-type Header struct {
+// HeaderData values in shared memory
+type HeaderData struct {
 	Version          string `rawlen:"16"`
 	TscBegin         uint64 `json:"tscBegin"`
 	TscEnd           uint64 `json:"tscEnd"`
@@ -144,6 +154,11 @@ type Header struct {
 	TimeStamp        uint64 `json:"timestamp"`
 	SocketFd         int32  `json:"socketFd"`
 	PollMs           uint32 `json:"pollMs"`
+}
+
+// Header struct for the PCM data
+type Header struct {
+	Data HeaderData `json:"/pcm/header"`
 }
 
 // CPU Model IDs

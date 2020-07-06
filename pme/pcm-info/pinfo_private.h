@@ -8,7 +8,7 @@
 #define _PINFO_PRIVATE_H_
 
 #define DEFAULT_SOCKET_LOCATION		"/var/run/pcm-info"
-#define DEFAULT_SOCKET_FILE_PREFIX	"pinfo"
+#define DEFAULT_SOCKET_FILE_PREFIX	"pcm-data"
 
 #define PINFO_MAX_CALLBACKS 64
 

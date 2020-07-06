@@ -23,7 +23,7 @@ import (
 
 const (
 	// pmeVersion string
-	pmeVersion = "20.02.0"
+	pmeVersion = "20.07.0"
 )
 
 // PanelInfo for title and primitive
@@ -89,12 +89,6 @@ func init() {
 	perfmon = PerfMonitor{}
 	perfmon.version = pmeVersion
 
-	// Setup and locate the process info socket connections
-	perfmon.pinfoPCM = pinfo.New("/var/run/pcm-info", "pinfo")
-	if perfmon.pinfoPCM == nil {
-		panic("unable to setup pinfoPCM")
-	}
-
 	// Create the main tveiw application.
 	perfmon.app = tview.NewApplication()
 }
@@ -114,11 +108,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if options.ShowVersion {
-		fmt.Printf("PME Version: %s\n", perfmon.version)
-		return
-	}
-
 	if len(options.Ptty) > 0 {
 		err = tlog.Open(options.Ptty)
 		if err != nil {
@@ -126,6 +115,11 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	if options.ShowVersion {
+		fmt.Printf("PME Version: %s\n", perfmon.version)
+		return
+	}
+
 	tlog.Log(mainLog, "\n===== %s =====\n", PerfmonInfo(false))
 	fmt.Printf("\n===== %s =====\n", PerfmonInfo(false))
 
@@ -224,6 +218,12 @@ func main() {
 	if options.Dbg {
 		fmt.Printf("Waiting %d seconds for dlv to attach\n", options.WaitTime)
 		time.Sleep(time.Second * time.Duration(options.WaitTime))
+	}
+
+	// Setup and locate the process info socket connections
+	perfmon.pinfoPCM = pinfo.New("/var/run/pcm-info", "pcm-data")
+	if perfmon.pinfoPCM == nil {
+		panic("unable to setup pinfoPCM")
 	}
 
 	if err := perfmon.pinfoPCM.StartWatching(); err != nil {

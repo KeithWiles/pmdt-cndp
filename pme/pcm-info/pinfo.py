@@ -66,8 +66,8 @@ readline.set_completer_delims(readline.get_completer_delims().replace('/', ''))
 
 fd = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 # Path to sockets for processes run as a root user
-for f in glob.glob('/var/run/pcm-info/pinfo.*'):
+for f in glob.glob('/var/run/pcm-info/pcm-data'):
   handle_socket(f)
 # Path to sockets for processes run as a regular user
-for f in glob.glob('/run/user/%d/pcm-info/pinfo.*' % os.getuid()):
+for f in glob.glob('/run/user/%d/pcm-info/pcm-data' % os.getuid()):
   handle_socket(f)
