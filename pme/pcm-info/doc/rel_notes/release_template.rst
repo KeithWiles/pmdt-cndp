@@ -14,12 +14,6 @@ PMDT Release Template
    Variable and config names should be quoted as fixed width text:
    ``LIKE_THIS``.
 
-   Build the docs and view the output file to ensure the changes are correct::
-
-      make doc-guides-html
-
-      xdg-open build/doc/html/guides/rel_notes/release_template.html
-
 
 New Features
 ------------
@@ -112,5 +106,4 @@ Tested Platforms
    This section is a comment. Do not overwrite or remove it.
    Also, make sure to start the actual text at the margin.
    =========================================================
-
 

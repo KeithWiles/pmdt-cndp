@@ -49,9 +49,6 @@ Data Plane
 DIMM
    Dual In-line Memory Module
 
-Doxygen
-   A documentation generator used in the DPDK to generate the API reference.
-
 DPDK
    Data Plane Development Kit
 
@@ -66,4 +63,12 @@ RTE
    processing, in a lightweight environment as a Linux* application and using
    Poll Mode Drivers (PMDs) to increase speed.
 
+PCM 
+   PCM
 
+PID 
+   Process ID number. Each process on a linux machine is given a unique 
+   identification number.
+
+PMDT 
+   Performance Monitor Data Toolkit 

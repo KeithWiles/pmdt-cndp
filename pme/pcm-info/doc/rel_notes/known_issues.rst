@@ -22,4 +22,3 @@ Example Issue Template
 
 **Affected Environment/Platform**:
    OS / Platform that is known to be affected by the issue. If all, state all. 
-

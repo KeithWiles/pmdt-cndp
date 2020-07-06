@@ -1,4 +1,6 @@
 # Please keep these options sorted alphabetically.
 
+option('enable_docs', type: 'boolean', value: false,
+        description: 'build documentation')
 option('opcm_dir', type: 'string', value: '/work/projects/intel/pmdt/opcm',
 	description: 'path to the OPCM files')

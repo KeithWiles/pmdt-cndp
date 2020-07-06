@@ -24,11 +24,10 @@ the root cause through step by step debug at various stages.
 Is the tool not displaying any data? 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
+TODO: Add troubleshooting advice. 
 
 
 Is the tool not finding your DPDK application? 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
-
+TODO: Add troubleshooting advice. 

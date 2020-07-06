@@ -9,7 +9,6 @@ Contributor's Guidelines
     :numbered:
 
     coding_style
-    design
     documentation
     patches 
 
