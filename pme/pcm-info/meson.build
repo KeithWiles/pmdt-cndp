@@ -10,6 +10,10 @@ project('PCM-Info', ['cpp', 'c'],
     meson_version: '>= 0.47.1'
 )
 
+# build docs
+# location of docs (pme/pcm-info/doc)
+subdir('doc')
+
 # set up some global vars for compiler, platform, configuration, etc.
 cc = meson.get_compiler('c')
 #ccpp = meson.get_compiler('cpp')
