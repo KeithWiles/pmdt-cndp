@@ -11,7 +11,7 @@ project('PCM-Info', ['cpp', 'c'],
 )
 
 # build docs
-# location of docs (../doc)
+# location of docs (pme/pcm-info/doc)
 subdir('doc')
 
 # set up some global vars for compiler, platform, configuration, etc.
