@@ -168,7 +168,7 @@ func (pi *ProcessInfo) Remove(name string) {
 
 func (pi *ProcessInfo) addFile(name, dir string) {
 
-	if strings.HasPrefix(filepath.Base(name), pi.baseName) {
+	if len(name) == 0 || strings.HasPrefix(filepath.Base(name), pi.baseName) == true {
 
 		/*
 			ext := filepath.Ext(name)
@@ -179,8 +179,13 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 			} */
 
 		var path string
-		path = pi.basePath + "/" + dir + "/" + name
+		if len(name) == 0 {
+			path = pi.basePath + "/" + dir
+		} else {
+			path = pi.basePath + "/" + dir + "/" + name
+		}
 
+		tlog.DoPrintf("ProcessInfo.addFile: path %v\n", path)
 		if a, ok := pi.connInfo[path]; ok {
 			a.valid = true
 			return
@@ -191,7 +196,6 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 		laddr := net.UnixAddr{Name: path, Net: t}
 		conn, err := net.DialUnix(t, nil, &laddr)
 		if err != nil {
-			//log.Printf("connection to socket failed: %v", err)
 			return
 		}
 
@@ -206,8 +210,6 @@ func (pi *ProcessInfo) addFile(name, dir string) {
 			return
 		}
 		b := buf[:n]
-
-		//tlog.DebugPrintf("Data: %v\n", string(d))
 
 		tv := &TelemetryVersion{}
 		if err := json.Unmarshal(b, tv); err != nil {
@@ -252,10 +254,15 @@ func (pi *ProcessInfo) scan() {
 			}
 
 			for _, file := range appFiles {
-				// loooking for dpdk_telemetry directory
+				// looking for dpdk_telemetry directory
 				if strings.HasPrefix(filepath.Base(file.Name()), pi.baseName) {
 					pi.addFile(file.Name(), entry.Name())
 				}
+			}
+		} else {
+			// looking for pcm-info files
+			if strings.HasPrefix(filepath.Base(entry.Name()), pi.baseName) {
+				pi.addFile("", entry.Name())
 			}
 		}
 	}

@@ -157,8 +157,8 @@ func (pg *PageQPI) collectData() {
 
 func (pg *PageQPI) displayQPI(view *tview.Table) {
 
-	sys := pg.system
-	hdr := pg.header
+	sys := pg.system.Data
+	hdr := pg.header.Data
 
 	SetCell(view, 0, 0, fmt.Sprintf("%s: %s", cz.Wheat("PCM Version"), cz.SkyBlue(hdr.Version)), tview.AlignLeft)
 	SetCell(view, 0, 1, fmt.Sprintf("%s: %sms", cz.Wheat("PollRate"), cz.SkyBlue(hdr.PollMs)), tview.AlignLeft)

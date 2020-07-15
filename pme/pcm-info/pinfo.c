@@ -213,11 +213,11 @@ socket_listener(void *unused)
 }
 
 static inline char *
-get_socket_path(const char *runtime_dir, const char *prefix)
+get_socket_path(const char *runtime_dir, const char *filename)
 {
     static char path[1024];
 
-    snprintf(path, sizeof(path), "%s/%s.%d", runtime_dir, prefix, getpid());
+    snprintf(path, sizeof(path), "%s/%s", runtime_dir, filename);
 
     return path;
 }

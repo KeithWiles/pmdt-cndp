@@ -41,9 +41,14 @@ type PageCore struct {
 }
 
 const (
-	corePanelName string = "CoreCounters"
-	maxCorePoints int    = 52
+	corePanelName  string = "CoreCounters"
+	corePanelLogID string = "CorePaneLogId"
+	maxCorePoints  int    = 52
 )
+
+func init() {
+	tlog.Register(corePanelLogID)
+}
 
 // setupCore - setup and init the main page
 func setupCore() *PageCore {
@@ -183,21 +188,19 @@ func (pg *PageCore) displayCorePage(step int, ticks uint64) {
 
 func (pg *PageCore) staticCoreData() {
 
-	if pg.valid {
-		return
-	}
+	if pg.valid == false {
+		if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/system", &pg.system); err != nil {
+			tlog.ErrorPrintf("Unable to get PCM system information\n")
+			return
+		}
 
-	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/system", &pg.system); err != nil {
-		tlog.ErrorPrintf("Unable to get PCM system information\n")
-		return
-	}
+		if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/header", &pg.header); err != nil {
+			tlog.ErrorPrintf("Unable to get PCM header information\n")
+			return
+		}
 
-	if err := perfmon.pinfoPCM.Unmarshal(nil, "/pcm/header", &pg.header); err != nil {
-		tlog.ErrorPrintf("Unable to get PCM header information\n")
-		return
+		pg.valid = true
 	}
-
-	pg.valid = true
 }
 
 /*
@@ -221,10 +224,10 @@ func (pg *PageCore) collectData() {
 	}
 
 	gd1 := pg.charts.WithIndex(0)
-	gd1.AddPoint(float64(core.InstructionsPerCycle))
+	gd1.AddPoint(float64(core.Data.InstructionsPerCycle))
 
 	gd2 := pg.charts.WithIndex(1)
-	gd2.AddPoint(float64(core.Cycles))
+	gd2.AddPoint(float64(core.Data.Cycles))
 
 	/*
 		core := pg.pcmState.PCMCounters.Core
@@ -244,8 +247,8 @@ func (pg *PageCore) collectData() {
 
 func (pg *PageCore) displayCoreSystem(view *tview.Table) {
 
-	sys := pg.system
-	hdr := pg.header
+	sys := pg.system.Data
+	hdr := pg.header.Data
 
 	SetCell(view, 0, 0, fmt.Sprintf("%s %s", cz.Wheat("PCM Version", 12), cz.SkyBlue(hdr.Version)), tview.AlignLeft)
 	SetCell(view, 0, 1, fmt.Sprintf("%s %sms", cz.Wheat("PollRate", 12), cz.SkyBlue(hdr.PollMs)), tview.AlignLeft)
@@ -272,7 +275,7 @@ func (pg *PageCore) displayCore(view *tview.Table) {
 
 	row := 0
 	col := 0
-	num := int(pg.system.NumOfCores)
+	num := int(pg.system.Data.NumOfCores)
 	label := []string{
 		"Core/Socket", "", "IPC", "Cycles", "Retired", "Exec", "R-Freq",
 		"L3CacheMiss", "L3CacheRef", "L2CacheMiss", "L3CacheHit", "L2CacheHit",
@@ -286,11 +289,13 @@ func (pg *PageCore) displayCore(view *tview.Table) {
 
 	for i, j := 0, row; i < num; i++ {
 
-		core := pcm.CoreCounters{}
-		if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &core); err != nil {
+		data := pcm.CoreCounters{}
+		if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &data); err != nil {
 			tlog.ErrorPrintf("Unable to get PCM system information\n")
 			return
 		}
+
+		core := data.Data
 
 		SetCell(view, j+0, col, cz.Orange(fmt.Sprintf("%d/%d", core.CoreID, core.SocketID)))
 

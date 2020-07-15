@@ -20,13 +20,13 @@ func PerfmonInfo(color bool) string {
 	if !color {
 		return fmt.Sprintf("%s, Version: %s Pid: %d %s",
 			"DPDK Performance Monitor", Version(), os.Getpid(),
-			"Copyright © 2019 Intel Corporation")
+			"Copyright © 2019-2020 Intel Corporation")
 	}
 
 	return fmt.Sprintf("[%s, Version: %s Pid: %s %s]",
 		cz.Yellow("DPDK Performance Monitor"), cz.Green(Version()),
 		cz.Red(os.Getpid()),
-		cz.SkyBlue("Copyright © 2019 Intel Corporation"))
+		cz.SkyBlue("Copyright © 2019-2020 Intel Corporation"))
 }
 
 // NumCPUs is the number of CPUs in the system (logical cores)

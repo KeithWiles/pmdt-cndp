@@ -44,8 +44,13 @@ type ProcessInfo struct {
 
 // Define the buffer size to be used for incoming data
 const (
-	maxBufferSize = (16 * 1024)
+	maxBufferSize        = (16 * 1024)
+	pinfoLogID    string = "pinfoLogID"
 )
+
+func init() {
+	tlog.Register(pinfoLogID, true)
+}
 
 // New information structure
 func New(bpath, bname string) *ProcessInfo {
