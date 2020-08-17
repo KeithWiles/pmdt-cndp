@@ -23,7 +23,7 @@ import (
 
 const (
 	// pmeVersion string
-	pmeVersion = "20.07.0"
+	pmeVersion = "20.08.0"
 )
 
 // PanelInfo for title and primitive

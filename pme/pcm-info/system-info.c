@@ -100,7 +100,9 @@ pcmCore(void *_c)
     pinfo_append(c, "%Q:%lu,", "remoteMemoryBW", cc->remoteMemoryBW);
     pinfo_append(c, "%Q:%lu,", "localMemoryAccesses", cc->localMemoryAccesses);
     pinfo_append(c, "%Q:%lu,", "remoteMemoryAccesses", cc->remoteMemoryAccesses);
-    pinfo_append(c, "%Q:%lu", "thermalHeadroom", cc->thermalHeadroom);
+    pinfo_append(c, "%Q:%lu,", "thermalHeadroom", cc->thermalHeadroom);
+    pinfo_append(c,"%Q:%lu,", "branches", cc->branches);
+    pinfo_append(c,"%Q:%lu", "branchMispredicts", cc->branchMispredicts);
     pinfo_append(c, "}}");
 
     return 0;

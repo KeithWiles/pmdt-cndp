@@ -25,11 +25,14 @@ type PageAVX struct {
 	selectCore       *SelectWindow
 	pbf              *tview.Table
 	chart            *tview.TextView
+	turbo1           *tview.TextView
+	turbo2           *tview.TextView
+	turbo3           *tview.TextView
 	selected         int
 	selectionChanged bool
 	freqs            *graphdata.GraphInfo
 }
-       
+
 const (
 	avxPanelName string = "AVX"
 	maxAVXPoints int    = 120
@@ -63,6 +66,7 @@ func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	flex0 := tview.NewFlex().SetDirection(tview.FlexRow)
 	flex1 := tview.NewFlex().SetDirection(tview.FlexColumn)
 	flex2 := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex3 := tview.NewFlex().SetDirection(tview.FlexColumn)
 
 	// Create the top window for basic information about tool and panel
 	TitleBox(flex0)
@@ -99,18 +103,26 @@ func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	flex0.AddItem(flex1, 0, 3, true)
 
 	pg.chart = CreateTextView(flex2, "CPU 0 (C)", tview.AlignLeft, 0, 1, true)
-
 	flex0.AddItem(flex2, 0, 1, true)
+
+	pg.turbo1 = CreateTextView(flex3, "Turbo AVX2 Light (1)", tview.AlignLeft, 0, 1, true)
+	pg.turbo2 = CreateTextView(flex3, "Turbo AVX512 Light (2)", tview.AlignLeft, 0, 1, false)
+	pg.turbo3 = CreateTextView(flex3, "Turbo AVX512 Heavy (3)", tview.AlignLeft, 0, 1, false)
+	flex0.AddItem(flex3, 0, 2, true)
 
 	to.Add(pg.selectCore.table, 'c')
 	to.Add(pg.pbf, 'p')
 	to.Add(pg.chart, 'C')
 
+	to.Add(pg.turbo1, '1')
+	to.Add(pg.turbo2, '2')
+	to.Add(pg.turbo3, '3')
+
 	to.SetInputDone()
 
 	// Create timer and callback function to display and process PBF data
 	perfmon.timers.Add(avxPanelName, func(step int, ticks uint64) {
-		// up to 4 cases, done every second 
+		// up to 4 cases, done every second
 		switch step {
 		case 0:
 			pg.collectChartData()

@@ -5,15 +5,18 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/rivo/tview"
 
 	"pmdt.org/dpdk"
 	"pmdt.org/graphdata"
+	pcm "pmdt.org/pcm"
 	"pmdt.org/pinfo"
 
 	cz "pmdt.org/colorize"
+	// pbf "pmdt.org/intelpbf"
 	tab "pmdt.org/taborder"
 	tlog "pmdt.org/ttylog"
 )
@@ -38,13 +41,17 @@ type DPDKPanel struct {
 
 	dpdkInfo *tview.TextView
 	dpdkNet  *tview.Table
+	dpdkBusy *tview.TextView //Table
 	totalRX  *tview.TextView
 	totalTX  *tview.TextView
 
 	pinfoDPDK *pinfo.ProcessInfo
 	infoDPDK  dpdk.Information
 
-	data *rxtxData
+	system     pcm.System
+	data       *rxtxData
+	appCoreMap map[uint16][]uint16 //TODO
+	percent    []float64
 }
 
 // Setup the DPDK Panel data structure
@@ -53,6 +60,8 @@ func setupDPDKPanel() *DPDKPanel {
 	pg := &DPDKPanel{}
 
 	pg.data = &rxtxData{}
+
+	pg.appCoreMap = make(map[uint16][]uint16)
 
 	pg.data.rxPoints = graphdata.NewGraph(1)
 	for _, gd := range pg.data.rxPoints.Graphs() {
@@ -161,6 +170,7 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	pg.dpdkInfo = CreateTextView(flex2, "DPDK Info (2)", tview.AlignLeft, 0, 2, true)
 	pg.dpdkNet = CreateTableView(flex2, "DPDK Network Stats (3)", tview.AlignLeft, 0, 4, false)
+	pg.dpdkBusy = CreateTextView(flex2, "DPDK Core Busy Stats (b)", tview.AlignLeft, 0, 4, false)
 	pg.dpdkNet.SetFixed(2, 0)
 	pg.dpdkNet.SetSeparator(tview.Borders.Vertical)
 	flex2.AddItem(flex3, 0, 3, false)
@@ -171,6 +181,7 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	to.Add(pg.selectApp.table, '1')
 	to.Add(pg.dpdkInfo, '2')
 	to.Add(pg.dpdkNet, '3')
+	to.Add(pg.dpdkBusy, 'b')
 
 	to.SetInputDone()
 
@@ -188,6 +199,7 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	return dpdkPanelName, pg.topFlex
 }
 
+// selectedConnection returns the DPDK app name that is selected
 func (pg *DPDKPanel) selectedConnection() (*pinfo.ConnInfo, error) {
 
 	tlog.DebugPrintf("Value: %v\n", pg.selectApp.ItemValue()) // name of DPDK App
@@ -215,6 +227,7 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 		// Display the screens each second
 		pg.displayDPDKInfo(pg.dpdkInfo)
 		pg.displayDPDKNet(pg.dpdkNet)
+		pg.displayDPDKBusy(pg.dpdkBusy)
 		pg.displayChart(pg.totalRX, true)
 		pg.displayChart(pg.totalTX, false)
 	}
@@ -275,6 +288,16 @@ func (pg *DPDKPanel) getEthdevStats(a *pinfo.ConnInfo) {
 	}
 }
 
+// collectBusyData collect the cores branch and missed branches stats
+func (pg *PageCore) collectBusyData() {
+
+	core := pcm.CoreCounters{}
+	if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", pg.selected), &core); err != nil {
+		tlog.ErrorPrintf("Unable to get PCM system information\n")
+		return
+	}
+}
+
 func (pg *DPDKPanel) collectStats() {
 
 	a, err := pg.selectedConnection()
@@ -286,7 +309,7 @@ func (pg *DPDKPanel) collectStats() {
 	pg.getEthdevStats(a)
 }
 
-// Display the basic DPDK application information
+// displayDPDKInfo display the basic DPDK application information
 func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 
 	if view == nil {
@@ -310,7 +333,7 @@ func (pg *DPDKPanel) displayDPDKInfo(view *tview.TextView) {
 
 }
 
-// Display some Network information about the DPDK application
+// displayDPDKNet display some Network information about the DPDK application
 func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 
 	if view == nil {
@@ -391,9 +414,161 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 	pg.data.txPoints.GraphPoints(0).AddPoint(mbpsTx / (1024.0 * 1024.0))
 }
 
-// Display to update the graphs on the panel
-func (pg *DPDKPanel) displayChart(view *tview.TextView, rx bool) {
+// parseCoreMask parse the DPDK cores
+//func (pg *DPDKPanel) parseCoremask(int mask) {
 
+// DPDK list of cores
+//x := []int { 1, 2, 3 }
+
+// use bit operator
+//dpdkCores := append(dpdkCores, m)
+
+//}
+
+/*
+// getDPDKCores parse the coremask from the eal option of the selected DPDK app
+func (pg *DPDKPanel) getDPDKCores() {
+	//info := pg.infoDPDK
+	//
+	//dpdkCores := []int {0}
+
+	// Check that a coremask was passed, if not then use value 1
+	if err := strings.Contains(info.params.params, "-c"); err != nil {
+		tlog.WarnPrintf("Unable to get Cores for DPDK App: using default 0 value")
+	//dpdkCores := 0
+	//return dpdkCores
+	}
+	//if err == nil {
+	dpdkCoresParam := strings.SplitAfter(info.params.params, "-c ")
+	//}
+	// Grab core value, chop off the rest of the params
+	// until next ' '
+	dpdkCoresParam = strings.SplitAfter(dpdkCoresParam, " ")
+
+	st := 1
+	// For the length of the string add the values to
+	for st != NULL { //st != ERROR && c && (! end of st) ) {
+		//debug_printf("%c %x -> ", c, c);
+		switch (st) {
+			case 1: //START
+				if dpdkCoresParam.Contains(x) {
+					st = 2
+				}
+			case 2: // HEX
+				// If x exists, coremask
+				// Parse the coremask from the selected app
+				// replace 0x or 0X with empty String
+				mask := strings.Replace(dpdkCoresParam, "0x", "", -1)
+				mask = strings.Replace(mask, "0X", "", -1)
+
+				// convert to decimal then binary
+				mask = strconv.FormatInt(mask, 10)
+				mask = strconv.FormatInt(mask, 2)
+
+				temp := parseCoremask(mask)
+				// Add the core values of the params to the list of cores
+				// for the length of temp, add to the dpdkCores list
+
+
+				// Append dpdkCores from the coremask parser
+				dpdkCores.append(temp)
+		}
+	}
+	// Eal params stored in info.params.params
+
+}
+*/
+
+// Display some Busy/Branch information about the DPDK application
+func (pg *DPDKPanel) displayDPDKBusy(view *tview.TextView) {
+	if view == nil {
+		tlog.DoPrintf("displayDPDKBusy: view is nil\n")
+		return
+	}
+	/*
+		p := perfmon.pinfoPCM.ConnectionList()
+		if len(p) == 0 {
+			return
+		} */
+
+	pg.percent[0] = 100.0
+
+	// Pass the beginning and ending of the coremask (0-4 for poc)
+	pg.displayBusy(pg.percent, 0, 4, view)
+
+	/*
+		row := 0
+		col := 0
+		// num is EAL coremask of selected app
+		num := int(pg.system.Data.NumOfCores)
+		label := []string{
+			"Core/Socket", "", "Branches", "BranchMispredicts", "PercentBusy",
+		}
+		for i, t := range label {
+			SetCell(view, row+i, col, cz.Wheat(t))
+		}
+		row++
+		for i, j := 0, row; i < num; i++ {
+			data := pcm.CoreCounters{}
+			if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &data); err != nil {
+				tlog.ErrorPrintf("Unable to get PCM system information\n")
+				return
+			}
+			core := data.Data
+			total := 100.0
+			percent := (core.BranchMispredicts / core.Branches)
+			SetCell(view, row, j+0, cz.Orange(fmt.Sprintf("%d/%d", core.CoreID, core.SocketID)))
+			SetCell(view, row, j+2, cz.SkyBlue(core.Branches))
+			SetCell(view, row, j+3, cz.SkyBlue(core.BranchMispredicts))
+			p := clamp(float64(percent), 0.0, total)
+			SetCell(view, row, j+4, cz.SkyBlue(p))
+			row++
+		}
+	*/
+}
+
+// Display the busy meters
+func (pg *DPDKPanel) displayBusy(percent []float64, start, end int16, view *tview.TextView) {
+	_, _, width, _ := view.GetInnerRect()
+	width -= 14
+	if width <= 0 {
+		return
+	}
+	str := ""
+	str += fmt.Sprintf("%s\n", cz.Orange("Busy Percent          Load Meter"))
+	for i := start; i < end; i++ {
+		str += pg.drawBusyMeter(i, percent[i], width)
+	}
+	view.SetText(str)
+	view.ScrollToBeginning()
+}
+
+// Draw the meter for the busy ratio
+func (pg *DPDKPanel) drawBusyMeter(id int16, percent float64, width int) string {
+	total := 100.0
+
+	p := clamp(percent, 0.0, total)
+	if p > 0 {
+		p = math.Ceil((p / total) * float64(width))
+	}
+
+	bar := make([]byte, width)
+
+	for i := 0; i < width; i++ {
+		if i <= int(p) {
+			bar[i] = '|'
+		} else {
+			bar[i] = ' '
+		}
+	}
+	str := fmt.Sprintf(" %2d:%s%% [%s]\n",
+		id, cz.Red(percent, 5, 1), cz.LightGreen(string(bar)))
+
+	return str
+}
+
+// Display to update the graphs on the panel
+func (pg *DPDKPanel) displayChart(view *tview.TextView, rx bool) {
 	if rx {
 		view.SetText(pg.data.rxPoints.MakeChart(view))
 	} else {

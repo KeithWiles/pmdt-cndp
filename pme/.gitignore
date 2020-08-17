@@ -1,2 +1,5 @@
 pcm-info/build/
 go.sum
+../opcm/
+pcm-info/meson_options.txt
+

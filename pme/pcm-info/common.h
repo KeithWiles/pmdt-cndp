@@ -62,6 +62,8 @@ namespace PCMDaemon {
 	typedef struct PCMSystem PCMSystem;
 
 	struct PCMCoreCounter {
+		uint64 branches;
+		uint64 branchMispredicts;
 		uint32 coreId;
 		uint32 socketId;
 		double instructionsPerCycle;
@@ -96,6 +98,7 @@ namespace PCMDaemon {
 			localMemoryBW(0),
 			remoteMemoryBWAvailable(false),
 			remoteMemoryBW(0) {}
+			
 #endif
 	} ALIGN(ALIGNMENT);
 

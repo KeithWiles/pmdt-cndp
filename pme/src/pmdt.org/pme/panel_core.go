@@ -85,7 +85,7 @@ func CorePanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	pg.CoreSystem = CreateTableView(flex0, "System (1)", tview.AlignLeft, 4, 1, true)
 
 	// Core selection window to be able to select a core to view
-	table := CreateTableView(flex1, "Core (c)", tview.AlignLeft, 20, 1, true)
+	table := CreateTableView(flex1, "Core (c)", tview.AlignLeft, 15, 1, true)
 
 	// Select window setup and callback function when selection changes.
 	pg.selectCore = NewSelectWindow(table, "CoreCounters", 0, func(row, col int) {
@@ -108,15 +108,15 @@ func CorePanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	}
 	pg.selectCore.AddColumn(-1, names, cz.SkyBlueColor)
 
-	pg.CoreCharts[0] = CreateTextView(flex2, "IPC Charts (2)", tview.AlignLeft, 0, 1, true)
-	pg.CoreCharts[1] = CreateTextView(flex2, "Core Charts (3)", tview.AlignLeft, 0, 1, true)
+	pg.CoreCharts[0] = CreateTextView(flex2, "IPC Chart (2)", tview.AlignLeft, 0, 1, true)
+	pg.CoreCharts[1] = CreateTextView(flex2, "Cycles Chart (3)", tview.AlignLeft, 0, 1, true)
 
 	flex1.AddItem(flex2, 0, 2, true)
 
 	flex0.AddItem(flex1, 0, 2, true)
 
 	// Core range selection window to display counters
-	table1 := CreateTableView(flex3, "Core Range (r)", tview.AlignLeft, 20, 24, true)
+	table1 := CreateTableView(flex3, "Core Range (r)", tview.AlignLeft, 15, 24, true)
 
 	// Select window setup and callback function when selection changes.
 	pg.selectCoreRange = NewSelectWindow(table1, "Core Counters", 0, func(row, col int) {
@@ -281,6 +281,7 @@ func (pg *PageCore) displayCore(view *tview.Table) {
 		"L3CacheMiss", "L3CacheRef", "L2CacheMiss", "L3CacheHit", "L2CacheHit",
 		"L2CacheMPI", "L2CacheMPIHit", "L3CacheOccAvail", "L3CacheOcc",
 		"LocalMemoryBW", "RemoteMemoryBW", "LocalMemeoryAcc", "RemoteMAcc", "ThermalHR",
+		"Branches", "BranchMispredicts",
 	}
 	for i, t := range label {
 		SetCell(view, row+i, col, cz.Wheat(t))
@@ -326,6 +327,8 @@ func (pg *PageCore) displayCore(view *tview.Table) {
 		SetCell(view, j+18, col, cz.SkyBlue(core.LocalMemoryAccesses))
 		SetCell(view, j+19, col, cz.SkyBlue(core.RemoteMemoryAccesses))
 		SetCell(view, j+20, col, cz.SkyBlue(core.ThermalHeadroom))
+		SetCell(view, j+21, col, cz.SkyBlue(core.Branches))
+		SetCell(view, j+22, col, cz.SkyBlue(core.BranchMispredicts))
 		col++
 	}
 }
@@ -336,18 +339,3 @@ func (pg *PageCore) displayCharts(view *tview.TextView, start, end int) {
 	//pg.CoreCharts[0].SetText(pg.charts.MakeChart(pg.CoreCharts[0], pg.selected, pg.selected))
 	//pg.CoreCharts[1].SetText(pg.charts.MakeChart(pg.CoreCharts[1], pg.selected, pg.selected))
 }
-
-/*
-func (pg *PageCore) displayCharts(view *tview.TextView, start, end int) {
-
-	view.SetText(pg.charts.MakeChart(view, start, end))
-}
-
-
-
-// Display the Frequency values in the text view using a graph or chart
-func (pg *PagePBF) displayFreqChart() {
-
-	pg.chart.SetText(pg.freqs.MakeChart(pg.chart, pg.selected, pg.selected))
-}
-*/

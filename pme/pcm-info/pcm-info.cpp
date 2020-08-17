@@ -139,14 +139,18 @@ namespace PCMDaemon {
 			for (uint32 i(0); i < numOfCustomCounters; ++i)
 				regs[i] = defEventSelectRegister;
 
-			regs[0].fields.event_select = 0xB7; // OFFCORE_RESPONSE 0 event
-			regs[0].fields.umask = 0x01;
-			regs[1].fields.event_select = 0xBB; // OFFCORE_RESPONSE 1 event
-			regs[1].fields.umask = 0x01;
+			//regs[0].fields.event_select = 0xB7; // OFFCORE_RESPONSE 0 event
+			//regs[0].fields.umask = 0x01;
+			//regs[1].fields.event_select = 0xBB; // OFFCORE_RESPONSE 1 event
+			//regs[1].fields.umask = 0x01;
+			regs[0].fields.event_select = 0x0c4; // Branch Instruction Retired
+			regs[0].fields.umask = 0x04;
+			regs[1].fields.event_select = 0x0c5; // Branch Mispredict Retired
+			regs[1].fields.umask = 0x04;
 			regs[2].fields.event_select = ARCH_LLC_MISS_EVTNR;
 			regs[2].fields.umask = ARCH_LLC_MISS_UMASK;
-			regs[3].fields.event_select = ARCH_LLC_REFERENCE_EVTNR;
-			regs[3].fields.umask = ARCH_LLC_REFERENCE_UMASK;
+			regs[3].fields.event_select = ARCH_LLC_REFERENCE_EVTNR; 
+			regs[3].fields.umask = ARCH_LLC_REFERENCE_UMASK;			
 
             if (pcmInstance_->getMaxCustomCoreEvents() == 3)
                 conf.nGPCounters = 2; // drop LLC metrics
@@ -392,6 +396,8 @@ namespace PCMDaemon {
 			double execUsage = getExecUsage(coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
 			double relativeFrequency = getRelativeFrequency(coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
 			double activeRelativeFrequency = getActiveRelativeFrequency(coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
+			uint64 branches = getNumberOfCustomEvents(0, coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
+			uint64 branchMispredicts = getNumberOfCustomEvents(1, coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
 			uint64 l3CacheMisses = getNumberOfCustomEvents(2, coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
 			uint64 l3CacheReference = getNumberOfCustomEvents(3, coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
 			uint64 l2CacheMisses = getL2CacheMisses(coreStatesBefore_[coreI], coreStatesAfter_[coreI]);
@@ -400,6 +406,9 @@ namespace PCMDaemon {
 			double l3CacheMPI = double(l3CacheMisses) / instructionsRetired;
 			double l2CacheMPI = double(l2CacheMisses) / instructionsRetired;
 			int32 thermalHeadroom = coreStatesAfter_[coreI].getThermalHeadroom();
+			
+
+
 
 			coreCounters.coreId = coreI;
 			coreCounters.socketId = socketId;
@@ -417,6 +426,8 @@ namespace PCMDaemon {
 			coreCounters.l3CacheMPI = l3CacheMPI;
 			coreCounters.l2CacheMPI = l2CacheMPI;
 			coreCounters.thermalHeadroom = thermalHeadroom;
+			coreCounters.branches = branches;
+			coreCounters.branchMispredicts = branchMispredicts;
 
 			coreCounters.l3CacheOccupancyAvailable = pcmInstance_->L3CacheOccupancyMetricAvailable();
 			if (coreCounters.l3CacheOccupancyAvailable) {

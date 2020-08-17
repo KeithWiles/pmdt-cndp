@@ -33,17 +33,19 @@ type CoreCounterData struct {
 	ActiveRelativeFrequency   float64 `json:"activeRelativeFrequency"`
 	L3CacheMisses             uint64  `json:"l3CacheMisses"`
 	L3CacheReference          uint64  `json:"l3CacheReference"`
-	L2CacheMisses             uint64  `json:"l2CacheMisses"`
-	L3CacheHitRatio           float64 `json:"l3CacheHitRatio"`
-	L2CacheHitRatio           float64 `json:"l2CacheHitRatio"`
-	L3CacheMPI                float64 `json:"l3CacheMPI"`
-	L2CacheMPI                float64 `json:"l2CacheMPI"`
-	L3CacheOccupancy          uint64  `json:"l3CacheOccupancy"`
-	LocalMemoryBW             uint64  `json:"localMemoryBW"`
-	RemoteMemoryBW            uint64  `json:"remoteMemoryBW"`
-	LocalMemoryAccesses       uint64  `json:"localMemoryAccesses"`
-	RemoteMemoryAccesses      uint64  `json:"remoteMemoryAccesses"`
-	ThermalHeadroom           uint64  `json:"thermalHeadroom"`
+	L2CacheMisses        uint64  `json:"l2CacheMisses"`
+	L3CacheHitRatio      float64 `json:"l3CacheHitRatio"`
+	L2CacheHitRatio      float64 `json:"l2CacheHitRatio"`
+	L3CacheMPI           float64 `json:"l3CacheMPI"`
+	L2CacheMPI           float64 `json:"l2CacheMPI"`
+	L3CacheOccupancy     uint64  `json:"l3CacheOccupancy"`
+	LocalMemoryBW        uint64  `json:"localMemoryBW"`
+	RemoteMemoryBW       uint64  `json:"remoteMemoryBW"`
+	LocalMemoryAccesses  uint64  `json:"localMemoryAccesses"`
+	RemoteMemoryAccesses uint64  `json:"remoteMemoryAccesses"`
+	ThermalHeadroom      uint64  `json:"thermalHeadroom"`
+	Branches             uint64  `json:"branches"`
+	BranchMispredicts    uint64  `json:"branchMispredicts"`
 }
 
 // CoreCounters data structure
