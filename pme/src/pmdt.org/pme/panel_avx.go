@@ -13,17 +13,19 @@ import (
 	tab "pmdt.org/taborder"
 )
 
-// Create and display the PBF or Power Base Frequency information.
+// Create and display the AVX information.
 // Older system like Ubuntu do not have the kernel modules loaded or avaiable.
 // Ubuntu 18.04 does have the files in the /sys directory.
 
 // PageAVX - Data for AVX - Power Base Frequency
 type PageAVX struct {
-	tabOrder         *tab.Tab
-	topFlex          *tview.Flex
-	title            *tview.Box
-	selectCore       *SelectWindow
-	pbf              *tview.Table
+	tabOrder   *tab.Tab
+	topFlex    *tview.Flex
+	title      *tview.Box
+	selectCore *SelectWindow
+	avxStats   *tview.Table
+	avxThermal *tview.Table
+	//turboCharts      [3]*tview.TextView
 	chart            *tview.TextView
 	turbo1           *tview.TextView
 	turbo2           *tview.TextView
@@ -31,23 +33,44 @@ type PageAVX struct {
 	selected         int
 	selectionChanged bool
 	freqs            *graphdata.GraphInfo
+	turbo1freqs      *graphdata.GraphInfo
+	turbo2freqs      *graphdata.GraphInfo
+	turbo3freqs      *graphdata.GraphInfo
 }
 
 const (
-	avxPanelName string = "AVX"
-	maxAVXPoints int    = 120
+	avxPanelName   string = "AVX"
+	maxTurboPoints int    = 120
 )
 
-// Setup and create the PBF page structure
+// Setup and create the AVX page structure
 func setupAVX() *PageAVX {
 
 	pg := &PageAVX{}
 
 	pg.freqs = graphdata.NewGraph(NumCPUs())
 	for _, gd := range pg.freqs.Graphs() {
-		gd.SetMaxPoints(maxAVXPoints)
+		gd.SetMaxPoints(maxPBFPoints)
 	}
 	pg.freqs.SetFieldWidth(5)
+
+	pg.turbo1freqs = graphdata.NewGraph(NumCPUs())
+	for _, gd := range pg.turbo1freqs.Graphs() {
+		gd.SetMaxPoints(maxTurboPoints)
+	}
+	pg.turbo1freqs.SetFieldWidth(5)
+
+	pg.turbo2freqs = graphdata.NewGraph(NumCPUs())
+	for _, gd := range pg.turbo2freqs.Graphs() {
+		gd.SetMaxPoints(maxTurboPoints)
+	}
+	pg.turbo2freqs.SetFieldWidth(5)
+
+	pg.turbo3freqs = graphdata.NewGraph(NumCPUs())
+	for _, gd := range pg.turbo3freqs.Graphs() {
+		gd.SetMaxPoints(maxTurboPoints)
+	}
+	pg.turbo3freqs.SetFieldWidth(5)
 
 	pg.selectionChanged = true
 
@@ -96,9 +119,13 @@ func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	}
 	pg.selectCore.AddColumn(-1, names, cz.SkyBlueColor)
 
-	pg.pbf = CreateTableView(flex1, "AVX Power Base Frequency (p)", tview.AlignLeft, 0, 2, true)
-	pg.pbf.SetFixed(1, 0)
-	pg.pbf.SetSeparator(tview.Borders.Vertical)
+	pg.avxStats = CreateTableView(flex1, "AVX Power Base Frequency (p)", tview.AlignLeft, 0, 2, true)
+	pg.avxStats.SetFixed(1, 0)
+	pg.avxStats.SetSeparator(tview.Borders.Vertical)
+
+	pg.avxThermal = CreateTableView(flex1, "AVX Thermal & Busy Freq (t)", tview.AlignLeft, 0, 2, true)
+	pg.avxThermal.SetFixed(1, 0)
+	pg.avxThermal.SetSeparator(tview.Borders.Vertical)
 
 	flex0.AddItem(flex1, 0, 3, true)
 
@@ -111,7 +138,7 @@ func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	flex0.AddItem(flex3, 0, 2, true)
 
 	to.Add(pg.selectCore.table, 'c')
-	to.Add(pg.pbf, 'p')
+	to.Add(pg.avxStats, 'p')
 	to.Add(pg.chart, 'C')
 
 	to.Add(pg.turbo1, '1')
@@ -120,7 +147,7 @@ func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 
 	to.SetInputDone()
 
-	// Create timer and callback function to display and process PBF data
+	// Create timer and callback function to display and process AVX data
 	perfmon.timers.Add(avxPanelName, func(step int, ticks uint64) {
 		// up to 4 cases, done every second
 		switch step {
@@ -139,17 +166,21 @@ func AVXPanelSetup(nextSlide func()) (pageName string, content tview.Primitive) 
 	return avxPanelName, pg.topFlex
 }
 
-// Display the PBF data in the windows created
+// Display the AVX data in the windows created
 func (pg *PageAVX) displayAVXPage() {
 
-	pg.displayAVX(pg.pbf)
+	pg.displayAVX(pg.avxStats)
+	pg.displayAVXTherm(pg.avxThermal)
 	pg.displayFreqChart()
 
 	if pg.selectionChanged {
 		pg.selectionChanged = false
-		pg.pbf.ScrollToBeginning()
+		pg.avxStats.ScrollToBeginning()
 		pg.chart.ScrollToBeginning()
 		pg.chart.SetTitle(TitleColor(fmt.Sprintf("CPU %d (C)", pg.selectCore.ItemIndex())))
+		pg.turbo1.ScrollToBeginning()
+		pg.turbo2.ScrollToBeginning()
+		pg.turbo3.ScrollToBeginning()
 	}
 }
 
@@ -162,38 +193,84 @@ func (pg *PageAVX) collectChartData() {
 		// Append the frequency data to the list for the graphing in a chart
 		gd.AddPoint(float64(p.CurFreq))
 	}
+
+	for cpu, gd := range pg.turbo1freqs.Graphs() {
+		p := pbf.AVXInfoPerCPU(cpu)
+
+		// Append the frequency data to the list for the graphing in a chart
+		gd.AddPoint(float64(p.Turbo1))
+	}
+
+	for cpu, gd := range pg.turbo2freqs.Graphs() {
+		p := pbf.AVXInfoPerCPU(cpu)
+
+		// Append the frequency data to the list for the graphing in a chart
+		gd.AddPoint(float64(p.Turbo2))
+	}
+
+	for cpu, gd := range pg.turbo3freqs.Graphs() {
+		p := pbf.AVXInfoPerCPU(cpu)
+
+		// Append the frequency data to the list for the graphing in a chart
+		gd.AddPoint(float64(p.Turbo3))
+	}
+
 }
 
-// Display the PBF data in the table view
+// Display the avxStats data in the table view
 func (pg *PageAVX) displayAVX(view *tview.Table) {
 
 	// create the headers for each column
-	SetCell(pg.pbf, 0, 0, cz.Orange("CPU", 4))
-	SetCell(pg.pbf, 0, 1, cz.Orange("Max", 6))
-	SetCell(pg.pbf, 0, 2, cz.Orange("Min", 6))
-	SetCell(pg.pbf, 0, 3, cz.Orange("Curr", 6))
-	SetCell(pg.pbf, 0, 4, cz.Orange("Governor", 10))
-
-	// Display the CState names as columns
-	p := pbf.InfoPerCPU(0)
-	for j, v := range p.CStateNames {
-		SetCell(pg.pbf, 0, 5+j, cz.Orange(v, 6))
-	}
+	SetCell(pg.avxStats, 0, 0, cz.Orange("CPU", 4))
+	SetCell(pg.avxStats, 0, 1, cz.Orange("128BLight", 6))
+	SetCell(pg.avxStats, 0, 2, cz.Orange("128BHeavy", 6))
+	SetCell(pg.avxStats, 0, 3, cz.Orange("256BLight", 6))
+	SetCell(pg.avxStats, 0, 4, cz.Orange("256BHeavy", 6))
+	SetCell(pg.avxStats, 0, 3, cz.Orange("512BLight", 6))
+	SetCell(pg.avxStats, 0, 4, cz.Orange("512BHeavy", 6))
 
 	// For the number of CPUs display the data one CPU per line
 	for i := 0; i < NumCPUs(); i++ {
-		p := pbf.InfoPerCPU(i)
+		//p := pbf.AVXInfoPerCPU(i)
 
-		SetCell(pg.pbf, i+1, 0, cz.LightGreen(i))
-		SetCell(pg.pbf, i+1, 1, cz.SkyBlue(p.MaxFreq))
-		SetCell(pg.pbf, i+1, 2, cz.SkyBlue(p.MinFreq))
-		SetCell(pg.pbf, i+1, 3, cz.LightGreen(p.CurFreq))
-		SetCell(pg.pbf, i+1, 4, cz.CornSilk(p.Governor))
+		SetCell(pg.avxStats, i+1, 0, cz.LightGreen(i))
+		/*
+			SetCell(pg.avxStats, i+1, 1, cz.SkyBlue(p.128BLight))
+			SetCell(pg.avxStats, i+1, 2, cz.SkyBlue(p.128BHeavy))
+			SetCell(pg.avxStats, i+1, 3, cz.LightGreen(p.256BLight))
+			SetCell(pg.avxStats, i+1, 4, cz.CornSilk(p.256BHeavy))
+			SetCell(pg.avxStats, i+1, 3, cz.LightGreen(p.512BLight))
+			SetCell(pg.avxStats, i+1, 4, cz.CornSilk(p.512BHeavy))
+		*/
 
-		// Output the CStates per CPU per line
-		for j, v := range p.CStates {
-			SetCell(pg.pbf, i+1, 5+j, cz.LightGreen(v, 6))
-		}
+	}
+}
+
+// Display the PBF data in the table view
+func (pg *PageAVX) displayAVXTherm(view *tview.Table) {
+
+	// create the headers for each column
+	SetCell(pg.avxThermal, 0, 0, cz.Orange("CPU", 4))
+	SetCell(pg.avxThermal, 0, 1, cz.Orange("Busy Core Mhz", 6))
+	SetCell(pg.avxThermal, 0, 2, cz.Orange("Avg Core Mhz", 6))
+	SetCell(pg.avxThermal, 0, 3, cz.Orange("Core Temp", 6))
+	SetCell(pg.avxThermal, 0, 4, cz.Orange("Pkg Temp", 10))
+
+	//avx.mPerf = ReadMPerf(cpu)
+	//avx.aPerf = ReadAPerf(cpu)
+	//avx.thermStatus = ReadThermStatus(cpu)
+	//avx.pkgThermStatus = ReadPkgThermStatus(cpu)
+
+	// For the number of CPUs display the data one CPU per line
+	for i := 0; i < NumCPUs(); i++ {
+		p := pbf.AVXInfoPerCPU(i)
+
+		SetCell(pg.avxThermal, i+1, 0, cz.LightGreen(i))
+		SetCell(pg.avxThermal, i+1, 1, cz.SkyBlue(p.MPerf))
+		SetCell(pg.avxThermal, i+1, 2, cz.SkyBlue(p.APerf))
+		SetCell(pg.avxThermal, i+1, 3, cz.LightGreen(p.ThermStatus))
+		SetCell(pg.avxThermal, i+1, 4, cz.CornSilk(p.PkgThermStatus))
+
 	}
 }
 
@@ -201,4 +278,7 @@ func (pg *PageAVX) displayAVX(view *tview.Table) {
 func (pg *PageAVX) displayFreqChart() {
 
 	pg.chart.SetText(pg.freqs.MakeChart(pg.chart, pg.selected, pg.selected))
+	pg.chart.SetText(pg.turbo1freqs.MakeChart(pg.turbo1, pg.selected, pg.selected))
+	pg.chart.SetText(pg.turbo2freqs.MakeChart(pg.turbo2, pg.selected, pg.selected))
+	pg.chart.SetText(pg.turbo3freqs.MakeChart(pg.turbo3, pg.selected, pg.selected))
 }

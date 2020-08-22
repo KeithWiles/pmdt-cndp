@@ -17,13 +17,13 @@ import (
 
 // PageCore - Data for main page information
 type PageCore struct {
-	pcmRunning       bool
-	cmd              *exec.Cmd
-	tabOrder         *taborder.Tab
-	topFlex          *tview.Flex
-	title            *tview.Box
-	selectCore       *SelectWindow
-	selectCoreRange  *SelectWindow
+	pcmRunning bool
+	cmd        *exec.Cmd
+	tabOrder   *taborder.Tab
+	topFlex    *tview.Flex
+	title      *tview.Box
+	selectCore *SelectWindow
+	//selectCoreRange  *SelectWindow
 	CoreSystem       *tview.Table
 	Core             *tview.Table
 	CoreCharts       [2]*tview.TextView
@@ -116,10 +116,10 @@ func CorePanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	flex0.AddItem(flex1, 0, 2, true)
 
 	// Core range selection window to display counters
-	table1 := CreateTableView(flex3, "Core Range (r)", tview.AlignLeft, 15, 24, true)
+	//table1 := CreateTableView(flex3, "Core Range (r)", tview.AlignLeft, 15, 24, true)
 
 	// Select window setup and callback function when selection changes.
-	pg.selectCoreRange = NewSelectWindow(table1, "Core Counters", 0, func(row, col int) {
+	/*pg.selectCoreRange = NewSelectWindow(table1, "Core Counters", 0, func(row, col int) {
 
 		if row != pg.selected {
 			pg.selectCoreRange.UpdateItem(row, col)
@@ -135,9 +135,12 @@ func CorePanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	for i := 0; i < NumCPUs(); i++ {
 		s := fmt.Sprintf("%4d", i)
-		namesRange = append(names, s)
+		t := fmt.Sprintf("%4d", (i + 6))
+		namesRange = append(names, s+"-"+t)
+		i += 6
 	}
 	pg.selectCoreRange.AddColumn(-1, namesRange, cz.SkyBlueColor)
+	*/
 
 	pg.Core = CreateTableView(flex3, "Core Counters (4)", tview.AlignLeft, 0, 1, true)
 	pg.Core.SetFixed(2, 1)
@@ -149,7 +152,7 @@ func CorePanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 	to.Add(pg.selectCore.table, 'c')
 	to.Add(pg.CoreCharts[0], '2')
 	to.Add(pg.CoreCharts[1], '3')
-	to.Add(pg.selectCoreRange.table, 'r')
+	//to.Add(pg.selectCoreRange.table, 'r')
 	to.Add(pg.Core, '4')
 
 	to.SetInputDone()

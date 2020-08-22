@@ -6,6 +6,8 @@ package main
 import (
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/rivo/tview"
@@ -48,10 +50,10 @@ type DPDKPanel struct {
 	pinfoDPDK *pinfo.ProcessInfo
 	infoDPDK  dpdk.Information
 
-	system     pcm.System
-	data       *rxtxData
-	appCoreMap map[uint16][]uint16 //TODO
-	percent    []float64
+	system    pcm.System
+	data      *rxtxData
+	dpdkCores []uint16
+	percent   []float64
 }
 
 // Setup the DPDK Panel data structure
@@ -61,7 +63,7 @@ func setupDPDKPanel() *DPDKPanel {
 
 	pg.data = &rxtxData{}
 
-	pg.appCoreMap = make(map[uint16][]uint16)
+	//pg.appCoreMap = make(map[uint16][]uint16)
 
 	pg.data.rxPoints = graphdata.NewGraph(1)
 	for _, gd := range pg.data.rxPoints.Graphs() {
@@ -187,6 +189,19 @@ func DPDKPanelSetup(nextSlide func()) (pageName string, content tview.Primitive)
 
 	pg.topFlex = flex0
 
+	/*
+		num := int(pg.system.Data.NumOfCores)
+		for i := 0; i < num; i++ {
+			data := pcm.CoreCounters{}
+			if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &data); err != nil {
+				tlog.ErrorPrintf("Unable to get PCM system information\n")
+				return
+			}
+			core := data.Data
+			pg.percent[i] = float64(core.BranchMispredicts / core.Branches)
+		}
+	*/
+
 	// Time callback routine to dispaly or process data for the windows.
 	perfmon.timers.Add(dpdkPanelName, func(step int, ticks uint64) {
 		if pg.topFlex.HasFocus() {
@@ -222,6 +237,24 @@ func (pg *DPDKPanel) displayDPDKPanel(step int, ticks uint64) {
 	switch step {
 	case 0:
 		pg.collectStats()
+		pg.collectBusyData()
+
+	case 1:
+		num := NumCPUs()
+		percent := make([]float64, 0)
+		//tlog.WarnPrintf("CASE 1: %d", num)
+		for i := 0; i < num; i++ {
+			data := pcm.CoreCounters{}
+			if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &data); err != nil {
+				tlog.ErrorPrintf("Unable to get PCM system information\n")
+				return
+			}
+			core := data.Data
+			ratio := float64(core.BranchMispredicts) / float64(core.Branches)
+			percent = append(percent, ratio)
+			tlog.WarnPrintf("percent's: %f\n", percent[i])
+		}
+		pg.percent = percent
 
 	case 3:
 		// Display the screens each second
@@ -289,13 +322,25 @@ func (pg *DPDKPanel) getEthdevStats(a *pinfo.ConnInfo) {
 }
 
 // collectBusyData collect the cores branch and missed branches stats
-func (pg *PageCore) collectBusyData() {
+func (pg *DPDKPanel) collectBusyData() {
 
-	core := pcm.CoreCounters{}
-	if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", pg.selected), &core); err != nil {
-		tlog.ErrorPrintf("Unable to get PCM system information\n")
-		return
+	num := NumCPUs()
+	percent := make([]float64, 0)
+
+	tlog.WarnPrintf("NUM: %d", num)
+	for i := 0; i < num; i++ {
+		data := pcm.CoreCounters{}
+		if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &data); err != nil {
+			tlog.ErrorPrintf("Unable to get PCM system information\n")
+			return
+		}
+		core := data.Data
+		ratio := float64(core.BranchMispredicts) / float64(core.Branches)
+		ratio = ratio * 100.0
+		percent = append(percent, ratio)
+		tlog.WarnPrintf("percent's: %f\n", percent[i])
 	}
+	pg.percent = percent
 }
 
 func (pg *DPDKPanel) collectStats() {
@@ -415,69 +460,160 @@ func (pg *DPDKPanel) displayDPDKNet(view *tview.Table) {
 }
 
 // parseCoreMask parse the DPDK cores
-//func (pg *DPDKPanel) parseCoremask(int mask) {
+func (pg *DPDKPanel) parseCoremask(mask int64) {
+	// convert coremask to binary
+	// TODO
+	binMask := strconv.FormatInt(mask, 2)
 
-// DPDK list of cores
-//x := []int { 1, 2, 3 }
-
-// use bit operator
-//dpdkCores := append(dpdkCores, m)
-
-//}
-
-/*
-// getDPDKCores parse the coremask from the eal option of the selected DPDK app
-func (pg *DPDKPanel) getDPDKCores() {
-	//info := pg.infoDPDK
-	//
-	//dpdkCores := []int {0}
-
-	// Check that a coremask was passed, if not then use value 1
-	if err := strings.Contains(info.params.params, "-c"); err != nil {
-		tlog.WarnPrintf("Unable to get Cores for DPDK App: using default 0 value")
-	//dpdkCores := 0
-	//return dpdkCores
+	for i := len(binMask); i >= 0; i-- {
+		m := uint16(i)
+		// add core to the list
+		pg.dpdkCores = append(pg.dpdkCores, m)
 	}
-	//if err == nil {
-	dpdkCoresParam := strings.SplitAfter(info.params.params, "-c ")
-	//}
-	// Grab core value, chop off the rest of the params
-	// until next ' '
-	dpdkCoresParam = strings.SplitAfter(dpdkCoresParam, " ")
-
-	st := 1
-	// For the length of the string add the values to
-	for st != NULL { //st != ERROR && c && (! end of st) ) {
-		//debug_printf("%c %x -> ", c, c);
-		switch (st) {
-			case 1: //START
-				if dpdkCoresParam.Contains(x) {
-					st = 2
-				}
-			case 2: // HEX
-				// If x exists, coremask
-				// Parse the coremask from the selected app
-				// replace 0x or 0X with empty String
-				mask := strings.Replace(dpdkCoresParam, "0x", "", -1)
-				mask = strings.Replace(mask, "0X", "", -1)
-
-				// convert to decimal then binary
-				mask = strconv.FormatInt(mask, 10)
-				mask = strconv.FormatInt(mask, 2)
-
-				temp := parseCoremask(mask)
-				// Add the core values of the params to the list of cores
-				// for the length of temp, add to the dpdkCores list
-
-
-				// Append dpdkCores from the coremask parser
-				dpdkCores.append(temp)
-		}
-	}
-	// Eal params stored in info.params.params
 
 }
-*/
+
+// returnInt returns the next number from a string
+func (pg *DPDKPanel) returnNextInt(s string) string {
+	nextInt := make([]byte, 0)
+
+	for i := 0; i <= len(s); i++ {
+		if s[i] >= 0 && s[i] <= 9 {
+			nextInt = append(nextInt, s[i])
+		} else {
+			break
+		}
+	}
+	s = string(nextInt)
+	return s
+}
+
+// getDPDKCores parse the coremask from the eal option of the selected DPDK app
+func (pg *DPDKPanel) getDPDKCores() {
+
+	info := pg.infoDPDK
+
+	tlog.WarnPrintf("DPDK App Core List size %d\n", len(pg.dpdkCores))
+	// Check if the dpdkCores list is populated, delete if so
+	if len(pg.dpdkCores) >= 1 {
+		for i := len(pg.dpdkCores) - 1; i >= 0; i-- {
+			pg.dpdkCores = append(pg.dpdkCores[:i], pg.dpdkCores[i+1:]...)
+		}
+		tlog.WarnPrintf("DPDK App Core List is empty")
+	}
+
+	// app core params
+	coreList := strings.Join(info.Params.Params, " ")
+
+	tlog.WarnPrintf("DPDK App Core List %s!\n", info.Params.Params)
+
+	// Check that a coremask was passed, if not then use value 0
+	if strings.Contains(coreList, "-c") {
+		// Grab core value, chop off the rest of the params
+		// until next ' '
+		// check for -c
+		// TODO
+		coreList = strings.Join(strings.SplitAfter(coreList, "-c "), "")
+		coreList = strings.Join(strings.SplitAfter(coreList, " "), "")
+		tlog.WarnPrintf("Have cores listed: %s", coreList)
+	} else if strings.Contains(coreList, "-l") {
+		// TODO change after to before the characters
+		coreList = strings.Join(strings.SplitAfter(coreList, "-l "), "")
+		coreList = strings.Join(strings.SplitAfter(coreList, " "), "")
+		tlog.WarnPrintf("Have cores listed: %s", coreList)
+	} else {
+		tlog.WarnPrintf("Unable to get Cores for DPDK App: using default 0 value")
+		pg.dpdkCores = append(pg.dpdkCores, 0)
+		return
+	}
+
+	tlog.WarnPrintf("Have cores listed: %s", coreList)
+
+	st := 1
+	base := 10
+	size := 16
+	//debug_printf("%c %x -> ", c, c);
+	for st != 0 {
+		switch st {
+		case 1: //START
+			if strings.Contains(coreList, "x") {
+				st = 2
+			} else {
+				st = 3
+			}
+
+		case 2: // HEX
+			// If x exists, coremask is in hex
+			// Parse the coremask from the selected app
+			// replace 0x or 0X with empty String
+			mask := strings.Replace(coreList, "0x", "", -1)
+			mask = strings.Replace(mask, "0X", "", -1)
+
+			// convert from hexadecimal then parse mask to temp
+			temp, err := strconv.ParseInt(mask, 16, 16)
+			if err != nil {
+				tlog.WarnPrintf("Unable to parse Coremask for DPDK App: using default 0 value")
+				st = 0 // exit
+			}
+			// Append dpdkCores from the coremask parser
+			pg.parseCoremask(temp)
+			st = 0
+
+		case 3:
+			// coreList
+			// for lenth of string increment through numbers:
+			for i := 0; i >= len(coreList)-1; i++ {
+				substring := coreList[i:]
+				firstNum := pg.returnNextInt(substring)
+				//coreList = strings.TrimLeft(coreList, firstNum)
+				i += len(firstNum)
+				// ',': add single core
+				if coreList[i] == ',' {
+					newCore, err := strconv.ParseInt(firstNum, base, size)
+					if err != nil {
+						tlog.WarnPrintf("Unable to parse newCore")
+						st = 0 // exit
+						break
+					}
+					pg.dpdkCores = append(pg.dpdkCores, uint16(newCore))
+				} else if coreList[i] == '-' {
+					// '-' add range to list, include beginning and end
+					begCore := firstNum
+					i++
+					substring := coreList[i:]
+					endCore := pg.returnNextInt(substring)
+					begCoreInt, err := strconv.ParseInt(begCore, base, 0)
+					if err != nil {
+						tlog.WarnPrintf("Error converting string")
+						st = 0
+						break
+					}
+					endCoreInt, err := strconv.ParseInt(endCore, base, 0)
+					if err != nil {
+						tlog.WarnPrintf("Error converting string")
+						st = 0
+						break
+					}
+					for begCoreInt <= endCoreInt {
+						pg.dpdkCores = append(pg.dpdkCores, uint16(begCoreInt))
+						begCoreInt++
+					}
+				} else {
+					//Add the last value
+					newCore, err := strconv.ParseInt(firstNum, base, size)
+					if err != nil {
+						tlog.WarnPrintf("Unable to parse newCore")
+						st = 0 // exit
+						break
+					}
+					pg.dpdkCores = append(pg.dpdkCores, uint16(newCore))
+					break
+				}
+			}
+			st = 0
+		}
+	}
+}
 
 // Display some Busy/Branch information about the DPDK application
 func (pg *DPDKPanel) displayDPDKBusy(view *tview.TextView) {
@@ -485,60 +621,34 @@ func (pg *DPDKPanel) displayDPDKBusy(view *tview.TextView) {
 		tlog.DoPrintf("displayDPDKBusy: view is nil\n")
 		return
 	}
-	/*
-		p := perfmon.pinfoPCM.ConnectionList()
-		if len(p) == 0 {
-			return
-		} */
+	// pg.dpdkCores
 
-	pg.percent[0] = 100.0
+	pg.getDPDKCores()
 
-	// Pass the beginning and ending of the coremask (0-4 for poc)
-	pg.displayBusy(pg.percent, 0, 4, view)
+	pg.displayBusy(pg.percent, 1, 14, view)
 
-	/*
-		row := 0
-		col := 0
-		// num is EAL coremask of selected app
-		num := int(pg.system.Data.NumOfCores)
-		label := []string{
-			"Core/Socket", "", "Branches", "BranchMispredicts", "PercentBusy",
-		}
-		for i, t := range label {
-			SetCell(view, row+i, col, cz.Wheat(t))
-		}
-		row++
-		for i, j := 0, row; i < num; i++ {
-			data := pcm.CoreCounters{}
-			if err := perfmon.pinfoPCM.Unmarshal(nil, fmt.Sprintf("/pcm/core,%d", i), &data); err != nil {
-				tlog.ErrorPrintf("Unable to get PCM system information\n")
-				return
-			}
-			core := data.Data
-			total := 100.0
-			percent := (core.BranchMispredicts / core.Branches)
-			SetCell(view, row, j+0, cz.Orange(fmt.Sprintf("%d/%d", core.CoreID, core.SocketID)))
-			SetCell(view, row, j+2, cz.SkyBlue(core.Branches))
-			SetCell(view, row, j+3, cz.SkyBlue(core.BranchMispredicts))
-			p := clamp(float64(percent), 0.0, total)
-			SetCell(view, row, j+4, cz.SkyBlue(p))
-			row++
-		}
-	*/
 }
 
 // Display the busy meters
 func (pg *DPDKPanel) displayBusy(percent []float64, start, end int16, view *tview.TextView) {
+	// check percent
+	if len(pg.percent) < 1 {
+		tlog.WarnPrintf("Core Busy Percentages not set\n")
+		return
+	}
 	_, _, width, _ := view.GetInnerRect()
-	width -= 14
+	width -= 25
 	if width <= 0 {
 		return
 	}
 	str := ""
-	str += fmt.Sprintf("%s\n", cz.Orange("Busy Percent          Load Meter"))
-	for i := start; i < end; i++ {
-		str += pg.drawBusyMeter(i, percent[i], width)
+	str += fmt.Sprintf("%s\n", cz.Orange("Busy Percentages by Core                    Load Meter"))
+	//for i := start; i <= end; i++ {
+	for _, i := range pg.dpdkCores {
+		str += pg.drawBusyMeter(int16(i), percent[i], width)
+		tlog.WarnPrintf("core: %d percentage: %d\n", int16(i), pg.percent[i])
 	}
+	//}
 	view.SetText(str)
 	view.ScrollToBeginning()
 }
@@ -546,6 +656,11 @@ func (pg *DPDKPanel) displayBusy(percent []float64, start, end int16, view *tvie
 // Draw the meter for the busy ratio
 func (pg *DPDKPanel) drawBusyMeter(id int16, percent float64, width int) string {
 	total := 100.0
+
+	if percent < 0 {
+		//
+		return "|"
+	}
 
 	p := clamp(percent, 0.0, total)
 	if p > 0 {
