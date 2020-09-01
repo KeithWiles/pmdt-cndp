@@ -473,6 +473,17 @@ func (pg *DPDKPanel) parseCoremask(mask int64) {
 
 }
 
+/*
+func GetIntSlice(i *[]string) []int {
+	var arr = *i
+	ret := []int{}
+	for _, str := range arr {
+		oneInt, _ := strconv.Atoi(str)
+		ret = append(ret, oneInt)
+	}
+	return ret
+}*/
+
 // returnInt returns the next number from a string
 func (pg *DPDKPanel) returnNextInt(s string) string {
 	nextInt := make([]byte, 0)
@@ -493,6 +504,11 @@ func (pg *DPDKPanel) getDPDKCores() {
 
 	info := pg.infoDPDK
 
+	//_, err := parser.Parse()
+	//if err != nil {
+	//	tlog.WarnPrintf("Unable to parse")
+	//}
+
 	tlog.WarnPrintf("DPDK App Core List size %d\n", len(pg.dpdkCores))
 	// Check if the dpdkCores list is populated, delete if so
 	if len(pg.dpdkCores) >= 1 {
@@ -504,7 +520,6 @@ func (pg *DPDKPanel) getDPDKCores() {
 
 	// app core params
 	coreList := strings.Join(info.Params.Params, " ")
-
 	tlog.WarnPrintf("DPDK App Core List %s!\n", info.Params.Params)
 
 	// Check that a coremask was passed, if not then use value 0
@@ -513,16 +528,21 @@ func (pg *DPDKPanel) getDPDKCores() {
 		// until next ' '
 		// check for -c
 		// TODO
-		coreList = strings.Join(strings.SplitAfter(coreList, "-c "), "")
-		coreList = strings.Join(strings.SplitAfter(coreList, " "), "")
-		tlog.WarnPrintf("Have cores listed: %s", coreList)
+		// TrimLeftFunc
+		//strings.IndexByte(coreList, "")
+		// TrimRightFunc
+		//coreList = strings.Join(strings.TrimLeft(coreList, "-c "), "")
+		//coreList = strings.Join(strings.SplitAfter(coreList, " "), "")
+		//strings.I(coreList, "-c")
+		//coreList = value[]len(value)
+		tlog.WarnPrintf("Have coremask: %v \n", coreList)
+
 	} else if strings.Contains(coreList, "-l") {
 		// TODO change after to before the characters
-		coreList = strings.Join(strings.SplitAfter(coreList, "-l "), "")
-		coreList = strings.Join(strings.SplitAfter(coreList, " "), "")
-		tlog.WarnPrintf("Have cores listed: %s", coreList)
+		tlog.WarnPrintf("Have core list: %v \n", coreList)
+
 	} else {
-		tlog.WarnPrintf("Unable to get Cores for DPDK App: using default 0 value")
+		tlog.WarnPrintf("Unable to get Cores for DPDK App: using default 0 value\n")
 		pg.dpdkCores = append(pg.dpdkCores, 0)
 		return
 	}
@@ -536,7 +556,7 @@ func (pg *DPDKPanel) getDPDKCores() {
 	for st != 0 {
 		switch st {
 		case 1: //START
-			if strings.Contains(coreList, "x") {
+			if strings.Contains(coreList, "0x") || strings.Contains(coreList, "Ox") {
 				st = 2
 			} else {
 				st = 3
@@ -622,15 +642,19 @@ func (pg *DPDKPanel) displayDPDKBusy(view *tview.TextView) {
 		return
 	}
 	// pg.dpdkCores
-
 	pg.getDPDKCores()
 
-	pg.displayBusy(pg.percent, 1, 14, view)
+	//start := pg.dpdkCores[0]
+	//end := pg.dpdkCores[len(pg.dpdkCores)-1]
+	start := uint16(0)
+	end := uint16(12)
+	tlog.WarnPrintf("Busy Core Start: %d End: %d\n", start, end)
+	pg.displayBusy(pg.percent, start, end, view)
 
 }
 
 // Display the busy meters
-func (pg *DPDKPanel) displayBusy(percent []float64, start, end int16, view *tview.TextView) {
+func (pg *DPDKPanel) displayBusy(percent []float64, start, end uint16, view *tview.TextView) {
 	// check percent
 	if len(pg.percent) < 1 {
 		tlog.WarnPrintf("Core Busy Percentages not set\n")
@@ -643,8 +667,8 @@ func (pg *DPDKPanel) displayBusy(percent []float64, start, end int16, view *tvie
 	}
 	str := ""
 	str += fmt.Sprintf("%s\n", cz.Orange("Busy Percentages by Core                    Load Meter"))
-	//for i := start; i <= end; i++ {
-	for _, i := range pg.dpdkCores {
+	for i := start; i <= end; i++ {
+		//for _, i := range pg.dpdkCores {
 		str += pg.drawBusyMeter(int16(i), percent[i], width)
 		tlog.WarnPrintf("core: %d percentage: %d\n", int16(i), pg.percent[i])
 	}
@@ -658,7 +682,7 @@ func (pg *DPDKPanel) drawBusyMeter(id int16, percent float64, width int) string 
 	total := 100.0
 
 	if percent < 0 {
-		//
+		// Placeholder for when counters are not collected
 		return "|"
 	}
 

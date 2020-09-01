@@ -167,6 +167,25 @@ func main() {
 		info.SetText(buildPanelString(currentPanel))
 	}
 
+	modal := tview.NewModal().
+		SetText("This is the Help Box: it is a pop-up model that will display detailed information about the current panel's data. Thank you for asking for help! Press Esc to close.").
+		AddButtons([]string{"Got it", "Cancel"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonLabel == "Got it" {
+				app.SetFocus(pages.SwitchToPage(strconv.Itoa(currentPanel)))
+			} else if buttonLabel == "Cancel" {
+				/*if err := pages.SwitchToPage(strconv.Itoa(currentPanel)); err != nil {
+					panic(err)
+				}*/
+			}
+		})
+
+	panelHelp := func() {
+		if err := app.SetRoot(modal, false).SetFocus(modal).Run(); err != nil {
+			panic(err)
+		}
+	}
+
 	for index, f := range panels {
 		title, primitive := f(nextPanel)
 		pages.AddPage(strconv.Itoa(index), primitive, true, index == currentPanel)
@@ -189,7 +208,7 @@ func main() {
 		} else if event.Key() == tcell.KeyCtrlQ {
 			app.Stop()
 		} else if event.Key() == tcell.KeyCtrlH {
-
+			panelHelp()
 		} else {
 			var idx int
 
