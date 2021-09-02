@@ -56,7 +56,7 @@ func setupCore() *PageCore {
 	pg := &PageCore{pcmRunning: false}
 
 	// create "graph" for each core
-	pg.charts = graphdata.NewGraph(NumCPUs() * 2) //2)
+	pg.charts = graphdata.NewGraph(NumCPUs() * 2)
 	for _, gd := range pg.charts.Graphs() {
 		gd.SetMaxPoints(maxCorePoints)
 	}
