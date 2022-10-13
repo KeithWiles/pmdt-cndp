@@ -19,6 +19,3 @@ pmdt/pme/pcm-info:
 pmdt/pme:
 	The Performance monitor application written in Go.
 
-Patches to the PMDT project should be sent to pmdt@dpdk.org 
-All patches must follow the DPDK.org patch submission process.
-
