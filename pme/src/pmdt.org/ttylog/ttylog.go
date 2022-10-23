@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright(c) 2019-2020 Intel Corporation
+// Copyright (c) 2019-2022 Intel Corporation
 
 package ttylog
 
@@ -97,7 +97,7 @@ func State(id string) (bool, error) {
 
 // SetState on a logid
 func SetState(id string, state bool) error {
-	_, ok := tlog.states[id]
+	state, ok := tlog.states[id]
 	if !ok {
 		return fmt.Errorf("unknown logid %s", id)
 	}
@@ -126,9 +126,9 @@ func IsActive(id string) bool {
 }
 
 // GetList returns the list of states and log ids
-func GetList() *LogStates {
+func GetList() LogStates {
 
-	return &tlog.states
+	return tlog.states
 }
 
 // FatalPrintf to print out fatal error messages

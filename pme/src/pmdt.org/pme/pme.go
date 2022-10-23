@@ -15,7 +15,7 @@ import (
 	cz "pmdt.org/colorize"
 	tlog "pmdt.org/ttylog"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	"pmdt.org/etimers"
 	"pmdt.org/pinfo"

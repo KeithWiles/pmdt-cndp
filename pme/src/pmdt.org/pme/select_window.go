@@ -5,7 +5,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	cz "pmdt.org/colorize"
 	tlog "pmdt.org/ttylog"
@@ -43,7 +43,7 @@ func NewSelectWindow(table *tview.Table, name string, offset int, f func(row, co
 	}
 
 	table.SetSelectable(true, false)
-	table.SetSelectedStyle(tcell.ColorDefault, tcell.ColorBlack, 0)
+	table.SetSelectedStyle(tcell.StyleDefault)
 
 	tlog.DebugPrintf("NewSelectWindow: %s: sCol %d, offset %d\n", w.name, w.sCol, w.offset)
 	table.Select(w.offset, 0)
@@ -82,9 +82,9 @@ func (w *SelectWindow) AddColumn(col int, values []interface{}, color ...string)
 	for _, name := range values {
 		s := fmt.Sprintf("%v", name)
 
-		// Set the color is the color arguement is given
+		// Set the color is the color argument is given
 		if len(color) > 0 {
-			s = fmt.Sprintf("%s", cz.ColorWithName(color[0], name))
+			s = cz.ColorWithName(color[0], name)
 		}
 		row++
 		tableCell := tview.NewTableCell(s).
@@ -100,7 +100,7 @@ func (w *SelectWindow) AddColumn(col int, values []interface{}, color ...string)
 		w.table.Select(w.sRow, w.sCol)
 	}
 
-	// Scroll the list to the begining of the list
+	// Scroll the list to the beginning of the list
 	w.table.ScrollToBeginning()
 }
 

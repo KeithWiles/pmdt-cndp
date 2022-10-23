@@ -31,6 +31,9 @@ func New() *Chart {
 
 	chart := &Chart{}
 
+	chart.config.Precision = 2
+	chart.config.AddColor = true
+
 	return chart
 }
 
@@ -103,7 +106,7 @@ func (ac *Chart) Plot(series []float64) string {
 
 	plot := createEmpty(rows, width)
 
-	precision := 2
+	precision := config.Precision
 	logMaximum = math.Log10(math.Max(math.Abs(maximum), math.Abs(minimum))) //to find number of zeros after decimal
 	if minimum == float64(0) && maximum == float64(0) {
 		logMaximum = float64(-1)

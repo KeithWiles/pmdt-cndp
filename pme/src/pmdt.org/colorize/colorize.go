@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright(c) 2019-2020 Intel Corporation
+// Copyright (c) 2019-2022 Intel Corporation
 
 package colorize
 
 import (
 	"fmt"
-	"github.com/gdamore/tcell"
 	"strings"
+
+	"github.com/gdamore/tcell/v2"
 )
 
 // colorizeInfo structure
 type colorizeInfo struct {
 	defWidth       int
 	floatPrecision int
-	defForground   string
+	defForeground  string
 	defBackground  string
 	defFlags       string
 }
@@ -53,11 +54,13 @@ const (
 	YellowGreenColor       = "yellowgreen"
 	LightYellowColor       = "lightyellow"
 	DarkOrangeColor        = "darkorange"
-	LightGreeColor         = "lightgreen"
+	LightGreenColor        = "lightgreen"
+	DarkMagentaColor       = "darkmagenta"
+	CyanColor              = "aqua"
 )
 
 // SetDefault - create a colorize instance
-func SetDefault(forground, background string, width, precision int, flags string) {
+func SetDefault(foreground, background string, width, precision int, flags string) {
 
 	// when precision is negative then set to the default value
 	if precision < 0 {
@@ -67,20 +70,20 @@ func SetDefault(forground, background string, width, precision int, flags string
 	colorInfo = colorizeInfo{
 		defWidth:       width,
 		floatPrecision: precision,
-		defForground:   forground,
+		defForeground:  foreground,
 		defBackground:  background,
 		defFlags:       flags,
 	}
 }
 
-// DefaultForgroundColor returns the default color
-func DefaultForgroundColor() string {
-	return colorInfo.defForground
+// DefaultForegroundColor returns the default color
+func DefaultForegroundColor() string {
+	return colorInfo.defForeground
 }
 
-// SetDefaultForgroundColor - Set the default forground color
-func SetDefaultForgroundColor(color string) {
-	colorInfo.defForground = color
+// SetDefaultForegroundColor - Set the default foreground color
+func SetDefaultForegroundColor(color string) {
+	colorInfo.defForeground = color
 }
 
 // DefaultBackgroundColor returns the default color
@@ -88,7 +91,7 @@ func DefaultBackgroundColor() string {
 	return colorInfo.defBackground
 }
 
-// SetDefaultBackgroundColor - Set the default forground color
+// SetDefaultBackgroundColor - Set the default background color
 func SetDefaultBackgroundColor(color string) {
 	colorInfo.defBackground = color
 }
@@ -103,8 +106,8 @@ func SetDefaultWidth(w int) {
 	colorInfo.defWidth = w
 }
 
-// SetFloatPercision - Set float precision
-func SetFloatPercision(w int) {
+// SetFloatPrecision - Set float precision
+func SetFloatPrecision(w int) {
 	colorInfo.floatPrecision = w
 }
 
@@ -126,19 +129,19 @@ func SetDefaultFlags(f string) {
 // Colorize - Add color to the value passed, w size can be 0, 1 or 2
 //   w[0] is the width and w[1] is precision or a float value if present
 //   w[1] is not present then use default colorInfo.floatPrecision
-//   w[2] is the forground color
+//   w[2] is the foreground color
 //   w[3] is the background color
 //   w[4] is the attribute of the color
 func Colorize(color string, v interface{}, w ...interface{}) string {
-	if colorInfo.defForground == "" {
-		colorInfo.defForground = "ivory"
+	if colorInfo.defForeground == "" {
+		colorInfo.defForeground = "ivory"
 	}
 
 	width := int(0)
 	precision := colorInfo.floatPrecision
-	forground := colorInfo.defForground
+	foreground := colorInfo.defForeground
 	if len(color) > 0 {
-		forground = color
+		foreground = color
 	}
 	background := colorInfo.defBackground
 	flags := colorInfo.defFlags
@@ -155,17 +158,17 @@ func Colorize(color string, v interface{}, w ...interface{}) string {
 			if p >= 0 {
 				precision = p
 			}
-		case 2: // forground color */
+		case 2: // foreground color */
 			s := v.(string)
 			if len(s) > 0 {
-				forground = s
+				foreground = s
 			}
 		case 3: // background color
 			s := v.(string)
 			if len(s) > 0 {
 				background = s
 			}
-		case 4: // flags used for color attibutes
+		case 4: // flags used for color attributes
 			s := v.(string)
 			if len(s) > 0 {
 				flags = s
@@ -174,8 +177,8 @@ func Colorize(color string, v interface{}, w ...interface{}) string {
 	}
 
 	// Build up the color tag strings for begin and end of the field to be printed
-	str := fmt.Sprintf("[%s:%s:%s]", forground, background, flags)
-	def := fmt.Sprintf("[%s:%s:%s]", colorInfo.defForground, colorInfo.defBackground, colorInfo.defFlags)
+	str := fmt.Sprintf("[%s:%s:%s]", foreground, background, flags)
+	def := fmt.Sprintf("[%s:%s:%s]", colorInfo.defForeground, colorInfo.defBackground, colorInfo.defFlags)
 
 	switch v.(type) {
 	case string:
@@ -208,6 +211,12 @@ func ColorWithName(color string, a interface{}, w ...interface{}) string {
 func Yellow(a interface{}, w ...interface{}) string {
 
 	return ColorWithName(YellowColor, a, w...)
+}
+
+// DarkMagenta - return string based on the color given
+func DarkMagenta(a interface{}, w ...interface{}) string {
+
+	return ColorWithName(DarkMagentaColor, a, w...)
 }
 
 // Green - return string based on the color given
@@ -274,6 +283,12 @@ func LightCoral(a interface{}, w ...interface{}) string {
 func LightCyan(a interface{}, w ...interface{}) string {
 
 	return ColorWithName(LightCyanColor, a, w...)
+}
+
+// Cyan - return string based on the color given
+func Cyan(a interface{}, w ...interface{}) string {
+
+	return ColorWithName(CyanColor, a, w...)
 }
 
 // Lavender - return string based on the color given
@@ -345,5 +360,5 @@ func DarkOrange(a interface{}, w ...interface{}) string {
 // LightGreen - return string based on the color given
 func LightGreen(a interface{}, w ...interface{}) string {
 
-	return ColorWithName(LightGreeColor, a, w...)
+	return ColorWithName(LightGreenColor, a, w...)
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright(c) 2019-2020 Intel Corporation
+// Copyright (c) 2019-2022 Intel Corporation
 //
 // Modified by Keith Wiles 2019 from https://github.com/guptarohit/asciigraph
 
@@ -16,6 +16,8 @@ type PlotConfig struct {
 	FieldWidth    int
 	Min, Max      float64
 	Caption       string
+	Precision     int
+	AddColor      bool
 
 	LabelColor   string
 	LineColor    string
@@ -120,6 +122,16 @@ func (ac *Chart) SetOffset(o int) *Chart {
 	return ac
 }
 
+// SetPrecision set the precision of the ticker
+func (ac *Chart) SetPrecision(p int) *Chart {
+
+	c := &ac.config
+
+	c.Precision = p
+
+	return ac
+}
+
 // FieldWidth - Get the default field width
 func (ac *Chart) FieldWidth() int {
 
@@ -154,7 +166,16 @@ func (ac *Chart) SetCaption(caption string) *Chart {
 	return ac
 }
 
+func (ac *Chart) AddColor(flag bool) *Chart {
+	c := &ac.config
+
+	c.AddColor = flag
+
+	return ac
+}
+
 func setColor(color string) string {
+
 	return "[" + color + "]"
 }
 
@@ -236,5 +257,11 @@ func (ac *Chart) SetTickColor(color string) *Chart {
 
 // EndColor - change color to default value
 func (ac *Chart) EndColor() string {
-	return setColor("white")
+	c := &ac.config
+
+	if c.AddColor {
+		return setColor("white")
+	} else {
+		return ""
+	}
 }

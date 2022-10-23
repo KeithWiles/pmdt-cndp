@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright(c) 2019-2020 Intel Corporation
+// Copyright (c) 2019-2022 Intel Corporation
 
 package graphdata
 
@@ -27,6 +27,7 @@ type GraphInfo struct {
 	tickColor    string
 	numGraphs    int
 	fieldWidth   int
+	precision    int
 	graphs       []*GraphData
 }
 
@@ -49,11 +50,13 @@ func (gd *GraphData) Index() int {
 }
 
 // AddPoint to the graph list and trim the data to fit
-func (gd *GraphData) AddPoint(point float64) {
+func (gd *GraphData) AddPoint(point float64) *GraphData {
 
 	gd.points = append(gd.points, point)
 
 	gd.Trim()
+
+	return gd
 }
 
 // MaxPoints is the number of allowed points in the graph
@@ -62,8 +65,10 @@ func (gd *GraphData) MaxPoints() int {
 }
 
 // SetMaxPoints of the graph in the number of points it can have
-func (gd *GraphData) SetMaxPoints(maxPoints int) {
+func (gd *GraphData) SetMaxPoints(maxPoints int) *GraphData {
 	gd.maxPoints = maxPoints
+
+	return gd
 }
 
 // Name returns the current name of the graph
@@ -72,13 +77,17 @@ func (gd *GraphData) Name() string {
 }
 
 // SetName of the graph
-func (gd *GraphData) SetName(name string) {
+func (gd *GraphData) SetName(name string) *GraphData {
 	gd.name = name
+
+	return gd
 }
 
 // SetFieldWidth of the values
-func (gi *GraphInfo) SetFieldWidth(width int) {
+func (gi *GraphInfo) SetFieldWidth(width int) *GraphInfo {
 	gi.fieldWidth = width
+
+	return gi
 }
 
 // WithIndex returns the graph at the given index value
@@ -99,7 +108,7 @@ func (gi *GraphInfo) Graphs() []*GraphData {
 // GraphPoints returns the GraphData slice of all points for a given graph
 func (gi *GraphInfo) GraphPoints(g int) *GraphData {
 
-	if g > (len(gi.graphs) - 1) {
+	if g >= len(gi.graphs) {
 		return nil
 	}
 	return gi.graphs[g]
@@ -131,6 +140,7 @@ func NewGraph(numGraphs int) *GraphInfo {
 		captionColor: "yellow",
 		tickColor:    "red",
 		fieldWidth:   10,
+		precision:    2,
 		numGraphs:    numGraphs,
 	}
 
@@ -139,6 +149,13 @@ func NewGraph(numGraphs int) *GraphInfo {
 		gd.index = i
 		gi.graphs = append(gi.graphs, gd)
 	}
+
+	return gi
+}
+
+// SetPrecision of the graph entries
+func (gi *GraphInfo) SetPrecision(p int) *GraphInfo {
+	gi.precision = p
 
 	return gi
 }
@@ -171,7 +188,7 @@ func (gi *GraphInfo) MakeChart(view *tview.TextView, w ...interface{}) string {
 
 	chart := asciichart.New()
 
-	// Get the inside rectange sizes
+	// Get the inside rectangle sizes
 	_, _, wOrig, hOrig := view.GetInnerRect()
 
 	// Calculate the height of the chart based on the number of charts and
@@ -199,6 +216,7 @@ func (gi *GraphInfo) MakeChart(view *tview.TextView, w ...interface{}) string {
 			SetLineColor(gi.lineColor).
 			SetCaptionColor(gi.captionColor).
 			SetTickColor(gi.tickColor).
+			SetPrecision(gi.precision).
 			Plot(gd.points)
 
 		// Add a line to the multiple graph string if not the last graph

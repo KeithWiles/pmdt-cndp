@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright(c) 2019-2020 Intel Corporation
+// Copyright (c) 2019-2022 Intel Corporation
 
 package taborder
 
 import (
 	"fmt"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	tlog "pmdt.org/ttylog"
 )
@@ -78,7 +78,7 @@ func (to *Tab) SetHighlightBorderColor(color tcell.Color) {
 	highlightBorderColor = color
 }
 
-// SetFocus to the tview
+// SetFocus to the tview primitive
 func (to *Tab) SetFocus(a interface{}) {
 
 	switch a.(type) {

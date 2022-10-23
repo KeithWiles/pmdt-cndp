@@ -6,7 +6,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/gdamore/tcell"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 	cz "pmdt.org/colorize"
 )
@@ -88,8 +88,8 @@ func CreateForm(flex *tview.Flex, msg string, align, fixedSize, proportion int, 
 		SetTitleAlign(align).
 		SetTitle(TitleColor(msg))
 
-	form.SetFieldBackgroundColor(tcell.ColorDefault).
-		SetFieldTextColor(tcell.ColorSlateGrey)
+	form.SetFieldBackgroundColor(tcell.ColorReset).
+		SetFieldTextColor(tcell.ColorReset)
 
 	flex.AddItem(form, fixedSize, proportion, focus)
 
@@ -122,11 +122,11 @@ func SetCell(table *tview.Table, row, col int, msg string, a ...interface{}) *tv
 	align := tview.AlignRight
 	selectable := false
 	for _, v := range a {
-		switch v.(type) {
+		switch d := v.(type) {
 		case int:
-			align = v.(int)
+			align = d
 		case bool:
-			selectable = v.(bool)
+			selectable = d
 		}
 	}
 	tableCell := tview.NewTableCell(msg).
